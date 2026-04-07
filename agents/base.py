@@ -26,7 +26,10 @@ class AgentService:
         self.context = context  # LD targeting context
 
     def get_config(self):
-        """Resolve AI Config from LD — gets model, instructions, tools."""
+        """Resolve AI Config from LD — gets model, instructions, tools.
+        Returns None if no AI client is available (local/test mode)."""
+        if self.ai_client is None:
+            return None
         return self.ai_client.config(
             self.config_key,
             self.context,
