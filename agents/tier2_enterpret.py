@@ -36,10 +36,7 @@ class Tier2EntrepretAgent(AgentService):
     """
 
     async def run(self) -> list[AccountRecord]:
-        config = self.get_config()
-        # AI Config instructions in LD define how to interpret
-        # ambiguous competitor mentions and edge cases
-
+        # Instructions available via self.get_instructions() for edge case handling
         all_accounts: dict[str, AccountRecord] = {}
 
         for prompt_key, prompt_text in ENTERPRET_PROMPTS.items():
