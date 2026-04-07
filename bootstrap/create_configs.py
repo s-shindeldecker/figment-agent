@@ -8,6 +8,8 @@ Usage:
 import os
 import json
 import urllib.request
+from dotenv import load_dotenv
+load_dotenv()
 import urllib.error
 
 
@@ -73,19 +75,14 @@ def create_ai_config(config: dict):
         "name": config["name"],
         "description": config.get("description", ""),
         "tags": ["e100", "agent"],
-        "variations": [
-            {
-                "key": "default",
-                "name": "Default",
-                "value": {
-                    "model": {"id": config["model"]},
-                    "prompt": [
-                        {"role": "system", "content": config["instructions"]}
-                    ],
-                },
-            }
-        ],
-        "defaultVariation": "default",
+        "defaultVariation": {
+            "key": "default",
+            "name": "Default",
+            "messages": [
+                {"role": "system", "content": config["instructions"]}
+            ],
+            "model": {"modelName": config["model"]},
+        },
     }).encode("utf-8")
 
     req = urllib.request.Request(
