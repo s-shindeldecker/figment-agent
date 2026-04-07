@@ -96,15 +96,24 @@ async def run_e100_refresh():
     # ---- Score, deduplicate, rank ----------------------------------------
     final_list = merge_and_score(all_accounts)
 
-    # ---- Track graph success in LD ---------------------------------------
-    if graph and graph.get_tracker():
-        graph.get_tracker().track_invocation_success()
+    # ---- Track graph and node success in LD ------------------------------
+    if graph and graph.enabled:
+        tracker = graph.get_tracker()
+        if tracker:
+            tracker.track_invocation_success()
+
+        # Track success on each node's individual AI Config tracker
+        # so per-config metrics appear in the LD AI Configs UI
+        for node_key, node in graph._nodes.items():
+            node_config = node.get_config()
+            if node_config and node_config.tracker:
+                node_config.tracker.track_success()
 
     # ---- Outputs ---------------------------------------------------------
     _print_results(final_list)
 
     sheet_id = os.getenv("GOOGLE_SHEET_ID")
-    if sheet_id:
+    if sheet_id and sheet_id != "...":
         from outputs.sheets_writer import write_to_sheets
         write_to_sheets(final_list, sheet_id)
         print(f"[Sheets] Written to Google Sheet {sheet_id}")
@@ -122,6 +131,7 @@ async def run_e100_refresh():
     print(f"\nE100 refresh complete — {len(final_list)} accounts ranked.")
 
     if ld_client:
+        ld_client.flush()   # Ensure all tracking events are sent before exit
         ld_client.close()
 
 
