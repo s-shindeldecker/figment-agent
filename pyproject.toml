@@ -1,15 +1,15 @@
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "figment-agent"
 version = "0.1.0"
 description = "E100 expansion list automation via LaunchDarkly Agent Graphs"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 dependencies = [
-    "launchdarkly-server-sdk>=9.0",
-    "launchdarkly-ai>=0.1",
+    "launchdarkly-server-sdk>=9.14",
+    "launchdarkly-server-sdk-ai>=0.16",
     "requests>=2.31",
     "gspread>=6.0",
     "google-auth>=2.0",
@@ -22,6 +22,9 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
+
+[tool.setuptools.packages.find]
+include = ["agents*", "core*", "outputs*", "bootstrap*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

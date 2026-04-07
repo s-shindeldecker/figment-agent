@@ -1,9 +1,7 @@
-import ldai
-import ldclient
-from ldclient.config import Config
-
-
 def init_ld_clients(sdk_key: str) -> tuple:
+    import ldai
+    import ldclient
+    from ldclient.config import Config
     ldclient.set_config(Config(sdk_key))
     ld_client = ldclient.get()
     ai_client = ldai.client.LDAIClient(ld_client)
@@ -30,10 +28,11 @@ class AgentService:
         Returns None if no AI client is available (local/test mode)."""
         if self.ai_client is None:
             return None
+        import ldai
         return self.ai_client.config(
             self.config_key,
             self.context,
-            ldai.client.AIConfig(enabled=True),
+            ldai.client.AICompletionConfigDefault(enabled=True),
             {}
         )
 

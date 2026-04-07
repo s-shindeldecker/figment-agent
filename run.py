@@ -2,6 +2,9 @@ import asyncio
 import os
 from datetime import datetime
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from core.merger import merge_and_score
 
 
@@ -42,12 +45,15 @@ async def run_e100_refresh():
         print("[LD] LD_SDK_KEY not set — skipping LaunchDarkly, running in local mode")
 
     # LD context — identifies this run for targeting/observability
-    context = {
-        "kind": "user",
-        "key": "e100-agent",
-        "name": "E100 Weekly Refresh",
-        "run_date": datetime.now().isoformat(),
-    }
+    if ld_client:
+        import ldclient
+        context = ldclient.Context.builder("e100-agent") \
+            .kind("user") \
+            .name("E100 Weekly Refresh") \
+            .set("run_date", datetime.now().isoformat()) \
+            .build()
+    else:
+        context = {"kind": "user", "key": "e100-agent", "name": "E100 Weekly Refresh"}
 
     # ---- Tier 1: Looker --------------------------------------------------
     from agents.tier1_looker import Tier1LookerAgent
