@@ -8,31 +8,30 @@ from core.schema import AccountRecord
 # ---------------------------------------------------------------------------
 # Column map: Looker CSV export header → normalized field
 #
-# Looker exports use human-readable labels rather than API field names.
-# To verify these against your actual export:
-#   1. Download the CSV from your Look
-#   2. Open it and compare the header row to the keys below
-#   3. Update any that don't match exactly
+# Mapped against the actual export headers. If you regenerate the Look
+# and column names change, update the values here to match.
 #
-# Looker sometimes prepends the view label (e.g. "Salesforce Accounts  ARR")
-# or shortens it (e.g. "ARR"). Check your actual file and adjust as needed.
+# Note: the export has two columns both named "Name" (AE and CSM).
+# The loader renames them to "Name_ae" and "Name_csm" automatically.
 # ---------------------------------------------------------------------------
 EXPORT_COLUMN_MAP = {
-    "account_name":                 "Salesforce Accounts  Account Name",
-    "sfdc_account_id":              "Salesforce Accounts  SFDC Account ID",
-    "ld_account_id":                "Salesforce Accounts  LD Account ID",
-    "arr":                          "Salesforce Accounts  ARR",
-    "plan":                         "Salesforce Accounts  Plan",
-    "rating":                       "Salesforce Accounts  Rating",
-    "geo":                          "Salesforce Accounts  Geo",
-    "industry":                     "Salesforce Accounts  Industry",
-    "renewal_date":                 "Salesforce Accounts  Renewal Date",
-    "ae":                           "Account Owner  Name",
-    "csm":                          "Customer Success Manager  Name",
-    "is_using_exp_90d":             "Ld Account Experimentation Usage Daily  Is Using Experimentation 90d",
-    "exp_events_mtd":               "Ld Account Experimentation Usage Daily  Experimentation Events Received Mtd",
-    "exp_events_entitled":          "Active Customer Entitlement  Experimentation Events Entitled To",
-    "days_since_last_iteration":    "Ld Experiments Daily  Days Since Most Recent Iteration Start By Account Avg",
+    "account_name":              "SFDC Account Name",
+    "sfdc_account_id":           "SFDC Account ID",
+    "ld_account_id":             "LD Account ID",
+    "arr":                       "ARR",
+    "plan":                      "Plan",
+    "rating":                    "Rating",
+    "geo":                       "Geo",
+    "industry":                  "Industry",
+    "renewal_date":              "Renewal Date",
+    "ae":                        "Name_ae",       # First "Name" column (AE)
+    "csm":                       "Name_csm",      # Second "Name" column (CSM)
+    "is_using_exp_90d":          "Is Using Experimentation 90d (Yes / No)",
+    "exp_events_mtd":            "Experimentation Events Received Mtd",
+    "exp_events_entitled":       "Experimentation Events Entitled To",
+    "exp_utilisation_rate":      "Exp Utilization Rate",
+    "days_since_last_iteration": "By Account (Avg)",
+    "active_experiments":        "Accounts With Active Experiments",
 }
 
 
@@ -72,23 +71,39 @@ class Tier1LookerAgent(AgentService):
     def _load_from_file(self, path: str) -> list[dict]:
         """
         Read a CSV exported directly from the Looker Look.
-        Looker exports include a header row with human-readable column names.
+
+        Handles two quirks of this specific export:
+          1. Two columns both named "Name" (AE and CSM) — renamed to
+             Name_ae and Name_csm based on their position in the header row.
+          2. ARR formatted as "$1,234,567.89" — stripped in _normalize.
         """
         if not os.path.exists(path):
             raise FileNotFoundError(f"Looker export not found: {path}")
 
         with open(path, newline="", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
+            raw_headers = next(csv.reader(f))
+
+        # Rename duplicate "Name" columns by position
+        seen: dict[str, int] = {}
+        deduped_headers = []
+        for col in raw_headers:
+            if col == "Name":
+                count = seen.get(col, 0)
+                deduped_headers.append("Name_ae" if count == 0 else "Name_csm")
+                seen[col] = count + 1
+            else:
+                deduped_headers.append(col)
+                seen[col] = seen.get(col, 0) + 1
+
+        with open(path, newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f, fieldnames=deduped_headers)
+            next(reader)  # skip original header row
             rows = list(reader)
 
         if not rows:
             raise ValueError(f"Looker export is empty: {path}")
 
-        # On first load, print the actual headers so you can verify EXPORT_COLUMN_MAP
-        actual_headers = list(rows[0].keys())
         print(f"[Tier1] Loaded {len(rows)} rows from {path}")
-        print(f"[Tier1] Columns found: {actual_headers}")
-
         return rows
 
     def _normalize_export_row(self, row: dict) -> AccountRecord:
@@ -109,14 +124,18 @@ class Tier1LookerAgent(AgentService):
             if val is None:
                 return None
             try:
-                # Remove commas from numbers like "1,234,567"
-                return float(str(val).replace(",", ""))
+                # Strip $ and commas from values like "$1,464,857.21"
+                return float(str(val).replace("$", "").replace(",", "").strip())
             except (ValueError, TypeError):
                 return None
 
         entitled = to_float("exp_events_entitled") or 0
         received = to_float("exp_events_mtd") or 0
-        utilisation = (received / entitled) if entitled > 0 else None
+        # Use pre-calculated utilisation rate from export if available,
+        # otherwise calculate it from events received / entitled
+        utilisation = to_float("exp_utilisation_rate")
+        if utilisation is None:
+            utilisation = (received / entitled) if entitled > 0 else None
 
         return AccountRecord(
             account_name=get("account_name"),
@@ -137,6 +156,7 @@ class Tier1LookerAgent(AgentService):
             exp_utilisation_rate=utilisation,
             is_using_exp_90d=False,     # Export is already filtered to No
             days_since_last_iteration=to_float("days_since_last_iteration"),
+            active_experiments=int(to_float("active_experiments") or 0) or None,
         )
 
     # ------------------------------------------------------------------
