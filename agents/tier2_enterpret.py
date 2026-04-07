@@ -62,21 +62,27 @@ class Tier2EntrepretAgent(AgentService):
 
     async def _query_enterpret(self, prompt: str) -> list[dict]:
         """
-        Call Enterpret via MCP server.
+        Call Enterpret via the Wisdom MCP server.
         Returns parsed JSON list of account objects.
 
-        Replace with your actual MCP client implementation.
+        Required env vars:
+            WISDOM_AUTH_TOKEN  — auth token for the Wisdom MCP server
+            WISDOM_SERVER_URL  — base URL of the Wisdom MCP server
+
+        Replace the stub below with your actual MCP client call.
         """
         # TODO: Replace with your actual MCP client call
         # Example pattern:
+        # import os
         # from your_mcp_client import call_mcp_tool
         # response = await call_mcp_tool(
-        #     server="enterpret",
+        #     server_url=os.getenv("WISDOM_SERVER_URL"),
+        #     auth_token=os.getenv("WISDOM_AUTH_TOKEN"),
         #     tool="wisdom_query",
         #     params={"prompt": prompt, "return_format": "json"}
         # )
         # return response.get("accounts", [])
-        raise NotImplementedError("MCP client not yet configured — see _query_enterpret docstring")
+        raise NotImplementedError("Wisdom MCP client not yet configured — see _query_enterpret docstring")
 
     def _normalize(self, item: dict) -> AccountRecord:
         urgency_map = {
