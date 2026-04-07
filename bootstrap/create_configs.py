@@ -1,6 +1,6 @@
 """
 Bootstrap script — creates AI Configs in LaunchDarkly via API.
-Run once to set up configs, or re-run to update instructions.
+Run once to set up configs, or re-run to delete and recreate them.
 
 Usage:
     python bootstrap/create_configs.py
@@ -8,14 +8,15 @@ Usage:
 import os
 import json
 import urllib.request
+import urllib.error
 from dotenv import load_dotenv
 load_dotenv()
-import urllib.error
 
 
 LD_API_KEY = os.getenv("LD_API_KEY")
 LD_PROJECT_KEY = os.getenv("LD_PROJECT_KEY", "default")
-LD_ENV_KEY = os.getenv("LD_ENV_KEY", "production")
+
+AGENT_GRAPH_NAME = "figment-e-100-weekly-refresh"
 
 AI_CONFIGS = [
     {
@@ -68,49 +69,76 @@ AI_CONFIGS = [
 ]
 
 
-def create_ai_config(config: dict):
-    url = f"https://app.launchdarkly.com/api/v2/projects/{LD_PROJECT_KEY}/ai-configs"
-    payload = json.dumps({
-        "key": config["key"],
-        "name": config["name"],
-        "description": config.get("description", ""),
-        "tags": ["e100", "agent"],
-        "defaultVariation": {
-            "key": "default",
-            "name": "Default",
-            "messages": [
-                {"role": "system", "content": config["instructions"]}
-            ],
-            "model": {"modelName": config["model"]},
-        },
-    }).encode("utf-8")
-
+def ld_request(method: str, path: str, payload: dict = None) -> tuple[int, dict]:
+    """Make an authenticated request to the LD API. Returns (status, body)."""
+    url = f"https://app.launchdarkly.com{path}"
+    data = json.dumps(payload).encode("utf-8") if payload else None
     req = urllib.request.Request(
         url,
-        data=payload,
+        data=data,
         headers={
             "Authorization": LD_API_KEY,
             "Content-Type": "application/json",
         },
-        method="POST",
+        method=method,
     )
     try:
         with urllib.request.urlopen(req) as resp:
-            print(f"Created: {config['key']} ({resp.status})")
+            body = json.loads(resp.read().decode()) if resp.length != 0 else {}
+            return resp.status, body
     except urllib.error.HTTPError as e:
         body = e.read().decode()
-        if e.code == 409:
-            print(f"Already exists (skipping): {config['key']}")
-        else:
-            print(f"Error creating {config['key']}: {e.code} — {body}")
+        try:
+            body = json.loads(body)
+        except Exception:
+            pass
+        return e.code, body
+
+
+def delete_ai_config(key: str):
+    status, body = ld_request("DELETE", f"/api/v2/projects/{LD_PROJECT_KEY}/ai-configs/{key}")
+    if status == 204:
+        print(f"  Deleted: {key}")
+    elif status == 404:
+        print(f"  Not found (skipping delete): {key}")
+    else:
+        print(f"  Error deleting {key}: {status} — {body}")
+
+
+def create_ai_config(config: dict):
+    status, body = ld_request("POST", f"/api/v2/projects/{LD_PROJECT_KEY}/ai-configs", {
+        "key": config["key"],
+        "name": config["name"],
+        "mode": "agent",
+        "tags": ["e100", "agent"],
+        "defaultVariation": {
+            "key": "default",
+            "name": "Default",
+            "instructions": config["instructions"],
+            "model": {"modelName": config["model"]},
+        },
+    })
+    if status == 201:
+        print(f"  Created: {config['key']}")
+    else:
+        print(f"  Error creating {config['key']}: {status} — {body}")
 
 
 if __name__ == "__main__":
     if not LD_API_KEY:
         raise SystemExit("LD_API_KEY environment variable not set")
 
+    print("Step 1: Deleting existing AI Configs...")
+    for config in AI_CONFIGS:
+        delete_ai_config(config["key"])
+
+    print("\nStep 2: Recreating AI Configs in Agent mode...")
     for config in AI_CONFIGS:
         create_ai_config(config)
 
-    print("\nDone. Next step: build the Agent Graph in the LaunchDarkly UI.")
-    print("AI > Agent Graphs > New Graph > e100-weekly-refresh")
+    print(f"\nDone. Next step: build the Agent Graph in the LaunchDarkly UI.")
+    print(f"AI > Agent Graphs > '{AGENT_GRAPH_NAME}'")
+    print(f"\nNodes to add (in order):")
+    for config in AI_CONFIGS:
+        root = " ← set as Root node" if config["key"] == "e100-orchestrator" else ""
+        print(f"  - {config['key']}{root}")
