@@ -1,0 +1,5 @@
+account_name,action,reason,override_by,date
+# Examples:
+# Acme Corp,exclude,churned - do not contact,scott@example.com,2026-04-07
+# BigCo Inc,include,strategic account - always include,scott@example.com,2026-04-07
+# MidSize LLC,deprioritize,renewal not until Q4,scott@example.com,2026-04-07

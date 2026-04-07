@@ -1,0 +1,32 @@
+# E100 Agent Configuration
+
+scoring:
+  tier1_weights:
+    zero_exp_usage: 3
+    high_cmau_low_exp: 3
+    open_opp: 3
+    never_used_exp: 2
+    utilisation_below_5pct: 2
+    declining_trend: 2
+    enterprise_plan: 1
+    arr_over_200k: 1
+    icp_rank_top_500: 1
+  tier2_urgency_scores:
+    immediate: 3
+    active: 2
+    watch: 1
+
+thresholds:
+  min_arr: 50000
+  utilisation_warning: 0.05    # Below 5% = low utilisation signal
+  plans:
+    - Enterprise
+    - Enterprise 2023
+    - Guardian
+
+schedule:
+  cron: "0 6 * * 1"            # Every Monday at 6am
+
+output:
+  sheets_tab: "E100 Master"
+  top_n_slack_digest: 10

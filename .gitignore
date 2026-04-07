@@ -1,0 +1,7 @@
+.env
+config/google_service_account.json
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+*.egg-info/
