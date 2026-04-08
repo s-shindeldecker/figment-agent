@@ -54,7 +54,7 @@ class Tier1LookerAgent(AgentService):
     LOOKER_BASE_URL = os.getenv("LOOKER_BASE_URL", "https://launchdarkly.cloud.looker.com")
 
     async def run(self) -> list[AccountRecord]:
-        # Instructions available via self.get_instructions() for edge case handling
+        self.log_graph_binding()
         export_path = os.getenv("LOOKER_EXPORT_PATH")
         if export_path:
             raw = self._load_from_file(export_path)

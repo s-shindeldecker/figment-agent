@@ -1,6 +1,7 @@
 """
-Bootstrap script — creates AI Configs in LaunchDarkly via API.
-Run once to set up configs, or re-run to delete and recreate them.
+Bootstrap script — creates the E100 prioritizer AI Config in LaunchDarkly via API.
+
+Wisdom prompts are **string feature flags** (create those separately in the LD UI or Flags API).
 
 Usage:
     python bootstrap/create_configs.py
@@ -16,54 +17,31 @@ load_dotenv()
 LD_API_KEY = os.getenv("LD_API_KEY")
 LD_PROJECT_KEY = os.getenv("LD_PROJECT_KEY", "default")
 
-AGENT_GRAPH_NAME = "figment-e-100-weekly-refresh"
+# String flag keys for Wisdom MCP prompt bodies (create as string variations in LaunchDarkly).
+WISDOM_STRING_FLAG_KEYS = (
+    "e100-wisdom-prompt-competitive-displacement",
+    "e100-wisdom-prompt-switching-intent",
+    "e100-wisdom-prompt-eppo-coverage",
+)
 
 AI_CONFIGS = [
     {
-        "key": "e100-orchestrator",
-        "name": "E100 Orchestrator",
-        "description": "Root agent — coordinates run, routes to collection agents",
-        "model": "claude-sonnet-4-20250514",
-        "instructions": (
-            "You are the E100 orchestration agent. "
-            "Your job is to coordinate the weekly E100 list refresh. "
-            "Route to tier1-looker and tier2-enterpret agents for data collection, "
-            "then to scorer-merger for final list assembly."
+        "key": "e100-prioritizer",
+        "name": "E100 List prioritizer",
+        "description": (
+            "Single LLM step after Looker + Wisdom + Tier3 merge: interpret signals and assign ranks."
         ),
-    },
-    {
-        "key": "e100-tier1-looker",
-        "name": "E100 Tier 1 — Looker",
-        "description": "Looker data collection and normalization",
         "model": "claude-sonnet-4-20250514",
         "instructions": (
-            "You are the Tier 1 data collection agent. "
-            "Query Looker for enterprise accounts not using Experimentation in the last 90 days. "
-            "Normalize results to the AccountRecord schema. "
-            "Flag any ambiguous or incomplete records in the notes field."
-        ),
-    },
-    {
-        "key": "e100-tier2-enterpret",
-        "name": "E100 Tier 2 — Enterpret",
-        "description": "Enterpret competitive intelligence queries and normalization",
-        "model": "claude-sonnet-4-20250514",
-        "instructions": (
-            "You are the Tier 2 competitive intelligence agent. "
-            "Query Enterpret for accounts mentioning competitors (Statsig, Optimizely, Eppo). "
-            "Normalize urgency as: immediate (active switching intent), active (evaluating), "
-            "watch (mentioned but no action). Normalize results to the AccountRecord schema."
-        ),
-    },
-    {
-        "key": "e100-scorer-merger",
-        "name": "E100 Scorer and Merger",
-        "description": "Scoring, deduplication, and final list assembly",
-        "model": "claude-sonnet-4-20250514",
-        "instructions": (
-            "You are the scorer and merger agent. "
-            "Deduplicate accounts across tiers, apply scoring weights, and assemble the final ranked list. "
-            "Flag accounts that appear in both Tier 1 and Tier 2 as dual-motion opportunities."
+            "You are a GTM prioritization assistant for an enterprise SaaS expansion list.\n"
+            "You receive JSON account records (Looker usage, competitive intel, notes).\n"
+            "Assess commercial potential, urgency, and fit; assign expansion_score (higher = more priority).\n"
+            "The user message will ask for a JSON array only. Each element must include:\n"
+            "  account_name (exact match to input),\n"
+            "  priority_rank (integer, 1 = top priority),\n"
+            "  expansion_score (number),\n"
+            "  notes (optional string with rationale).\n"
+            "Include every input account. Output JSON array only, no markdown fences."
         ),
     },
 ]
@@ -95,17 +73,36 @@ def ld_request(method: str, path: str, payload: dict = None) -> tuple[int, dict]
         return e.code, body
 
 
-def delete_ai_config(key: str):
-    status, body = ld_request("DELETE", f"/api/v2/projects/{LD_PROJECT_KEY}/ai-configs/{key}")
-    if status == 204:
-        print(f"  Deleted: {key}")
-    elif status == 404:
-        print(f"  Not found (skipping delete): {key}")
+def update_ai_config_variation(config: dict):
+    """PATCH the default variation to set Anthropic provider and update instructions."""
+    status, body = ld_request(
+        "PATCH",
+        f"/api/v2/projects/{LD_PROJECT_KEY}/ai-configs/{config['key']}/variations/default",
+        {
+            "instructions": config["instructions"],
+            "model": {
+                "modelName": config["model"],
+                "provider": "anthropic",
+            },
+        },
+    )
+    if status == 200:
+        print(f"  Updated: {config['key']}")
     else:
-        print(f"  Error deleting {key}: {status} — {body}")
+        print(f"  Error updating {config['key']}: {status} — {body}")
+
+
+def config_exists(key: str) -> bool:
+    status, _ = ld_request("GET", f"/api/v2/projects/{LD_PROJECT_KEY}/ai-configs/{key}")
+    return status == 200
 
 
 def create_ai_config(config: dict):
+    if config_exists(config["key"]):
+        print(f"  Already exists, updating: {config['key']}")
+        update_ai_config_variation(config)
+        return
+
     status, body = ld_request("POST", f"/api/v2/projects/{LD_PROJECT_KEY}/ai-configs", {
         "key": config["key"],
         "name": config["name"],
@@ -115,7 +112,10 @@ def create_ai_config(config: dict):
             "key": "default",
             "name": "Default",
             "instructions": config["instructions"],
-            "model": {"modelName": config["model"]},
+            "model": {
+                "modelName": config["model"],
+                "provider": "anthropic",
+            },
         },
     })
     if status == 201:
@@ -128,17 +128,18 @@ if __name__ == "__main__":
     if not LD_API_KEY:
         raise SystemExit("LD_API_KEY environment variable not set")
 
-    print("Step 1: Deleting existing AI Configs...")
-    for config in AI_CONFIGS:
-        delete_ai_config(config["key"])
-
-    print("\nStep 2: Recreating AI Configs in Agent mode...")
+    print("Upserting E100 prioritizer AI Config...")
     for config in AI_CONFIGS:
         create_ai_config(config)
 
-    print(f"\nDone. Next step: build the Agent Graph in the LaunchDarkly UI.")
-    print(f"AI > Agent Graphs > '{AGENT_GRAPH_NAME}'")
-    print(f"\nNodes to add (in order):")
-    for config in AI_CONFIGS:
-        root = " ← set as Root node" if config["key"] == "e100-orchestrator" else ""
-        print(f"  - {config['key']}{root}")
+    print("\nDone.")
+    print("\nNext: create the three Wisdom **string** multivariate flags (or run):")
+    print("  python bootstrap/create_wisdom_string_flags.py")
+    print("Flag keys (two variations each: empty + production prompt):")
+    for key in WISDOM_STRING_FLAG_KEYS:
+        print(f"  - {key}")
+    print("\nOptional Cypher overrides (Enterpret), names in agents.wisdom_prompts:")
+    print("  WISDOM_CYPHER_COMPETITIVE_DISPLACEMENT, WISDOM_CYPHER_SWITCHING_INTENT,")
+    print("  WISDOM_CYPHER_EPPO_COVERAGE, or WISDOM_CYPHER for all.")
+    print(f"\nPrioritizer AI Config key: {AI_CONFIGS[0]['key']} (override with E100_PRIORITIZER_AI_CONFIG_KEY).")
+    print("Disable that AI Config in LD to use deterministic merge_and_score instead of the LLM.")

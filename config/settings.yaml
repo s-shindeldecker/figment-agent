@@ -30,3 +30,22 @@ schedule:
 output:
   sheets_tab: "E100 Master"
   top_n_slack_digest: 10
+
+# Used when LD_SDK_KEY is unset or all three Wisdom string flags are empty (see .env.example).
+wisdom:
+  tier2_prompt_fallback: |
+    You are the Tier 2 competitive intelligence agent using Enterpret Wisdom (Knowledge Graph).
+
+    Investigate customer accounts for:
+    - Mentions of Statsig, Optimizely, Eppo, or other experimentation competitors (e.g. Gong),
+      frequency, and whether they are evaluating, frustrated, or actively using a competitor
+      alongside LaunchDarkly.
+    - Strongest signals of dissatisfaction or switching intent for accounts on Statsig/Eppo.
+    - Eppo mentions in Gong or Zendesk and whether Eppo is expanding inside existing LD relationships.
+
+    Normalize urgency as: immediate (active switching intent), active (evaluating), watch (mentioned only).
+
+    When the tool response allows, return a JSON array of objects:
+    [{ "account_name", "competitor", "urgency", "context" or "deal_context", "quote" (optional),
+       "competitor_spend" (optional), "renewal_window_months" (optional),
+       "is_existing_ld_customer" (optional) }].

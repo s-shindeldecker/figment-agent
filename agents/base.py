@@ -10,42 +10,42 @@ def init_ld_clients(sdk_key: str) -> tuple:
 
 class AgentService:
     """
-    Base class for all E100 agents.
+    Base class for E100 agents that may read LaunchDarkly AI Configs or flags.
 
-    Each agent:
-      1. Gets its instructions from the LD Agent Graph node (if available)
-      2. Executes its specific data collection or processing logic
-      3. Returns normalized AccountRecord list
-
-    The graph parameter is optional — if None, the agent runs with
-    default instructions (local/test mode).
+    The optional ``graph`` parameter is legacy (Agent Graph); the linear pipeline passes ``None``.
     """
 
     def __init__(self, ai_client, config_key: str, context, graph=None):
         self.ai_client = ai_client
         self.config_key = config_key
         self.context = context
-        self.graph = graph  # AgentGraphDefinition from LD, or None
+        self.graph = graph
 
     def get_node(self):
-        """
-        Get this agent's node from the LD Agent Graph.
-        Returns the AIAgentConfig for this node, or None if not available.
-        The node contains interpolated instructions from the LD AI Config.
-        """
-        if self.graph is None or not self.graph.enabled:
+        if self.graph is None or not getattr(self.graph, "enabled", False):
             return None
         return self.graph.get_node(self.config_key)
 
     def get_instructions(self):
-        """
-        Get the instructions for this agent from LD.
-        Returns None if running in local mode — agents use their own logic.
-        """
         node = self.get_node()
-        if node:
-            return node.instructions
-        return None
+        if node is None:
+            return None
+        cfg = node.get_config()
+        if cfg is None:
+            return None
+        return cfg.instructions
+
+    def log_graph_binding(self):
+        """No-op when graph is unused; kept for subclasses that may log LD binding."""
+        if self.graph is None:
+            return
+        node = self.get_node()
+        if node is None:
+            print(f"[LD/Graph] {self.config_key}: no node for this config key")
+            return
+        instr = self.get_instructions()
+        n = len(instr) if instr else 0
+        print(f"[LD/Graph] {self.config_key}: node bound ({n} chars instructions)")
 
     async def run(self) -> list:
         """Override in subclass. Returns list of AccountRecord."""
