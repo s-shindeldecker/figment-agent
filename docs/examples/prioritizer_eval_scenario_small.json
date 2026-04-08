@@ -1,0 +1,28 @@
+[
+  {
+    "account_name": "Acme Corp",
+    "tier": 1,
+    "source": "looker",
+    "arr": 250000,
+    "plan": "Enterprise",
+    "ae": "Jane Doe",
+    "exp_utilisation_rate": 0.02,
+    "is_using_exp_90d": true
+  },
+  {
+    "account_name": "Beta Industries",
+    "tier": 2,
+    "source": "enterpret",
+    "urgency": "immediate",
+    "competitor": "Statsig",
+    "deal_context": "Active POC discussion"
+  },
+  {
+    "account_name": "Contoso Ltd",
+    "tier": 1,
+    "source": "looker",
+    "arr": 80000,
+    "plan": "Enterprise 2023",
+    "exp_utilisation_rate": 0.4
+  }
+]

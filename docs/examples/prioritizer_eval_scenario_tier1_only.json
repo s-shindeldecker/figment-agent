@@ -1,0 +1,19 @@
+[
+  {
+    "account_name": "Northwind",
+    "tier": 1,
+    "source": "looker",
+    "arr": 500000,
+    "plan": "Enterprise",
+    "rating": "Strategic",
+    "geo": "AMER"
+  },
+  {
+    "account_name": "Fabrikam",
+    "tier": 1,
+    "source": "looker",
+    "arr": 120000,
+    "plan": "Guardian",
+    "exp_utilisation_rate": 0.01
+  }
+]

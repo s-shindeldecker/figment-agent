@@ -115,7 +115,16 @@ async def execute_wisdom_prompt_jobs(
                 )
                 _merge_wisdom_rows_into(agent, all_accounts, raw)
 
-    return list(all_accounts.values())
+    out = list(all_accounts.values())
+    if not out and prompt_jobs:
+        print(
+            f"{log_prefix} Wisdom returned no account rows for any query. "
+            "Common causes: Enterpret ServiceError (graph/search), or "
+            "search_knowledge_graph returning only metadata (org_id/query) without a "
+            "results list. Fix: set WISDOM_CYPHER_* / WISDOM_CYPHER for "
+            "execute_cypher_query, or contact Enterpret support."
+        )
+    return out
 
 
 def _merge_wisdom_rows_into(

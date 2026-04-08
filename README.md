@@ -46,7 +46,7 @@ Copy `.env.example` to `.env`. Important groups:
 | **LaunchDarkly** | `LD_SDK_KEY` — enables flags and AI Config evaluation. Without it, the app runs in local mode (YAML fallback for Wisdom prompts when applicable). |
 | **Looker** | `LOOKER_EXPORT_PATH` — path to exported CSV (file mode). For API mode, see `agents/tier1_looker.py` and unset `LOOKER_EXPORT_PATH`. |
 | **Wisdom MCP** | `WISDOM_AUTH_TOKEN` — [Bearer token from Enterpret](https://helpcenter.enterpret.com/en/articles/12665166-wisdom-mcp-server). Optional: `WISDOM_SERVER_URL`, `WISDOM_TIER2_PARALLEL`, `WISDOM_CYPHER_*`, `WISDOM_TIER2_TOOL`. |
-| **Prioritizer LLM** | `ANTHROPIC_API_KEY` — used when the LaunchDarkly AI Config is enabled but the `ldai` LangChain provider is unavailable. Disable the prioritizer AI Config in LD to use deterministic scoring only. |
+| **Prioritizer** | `E100_PRIORITIZER_MODE=deterministic` — skips the LLM and ranks with `merge_and_score` / `core/scorer.py` (Tier 1 usage heuristics + Tier 2 urgency). Default `llm` tries the AI Config then falls back on failure. `ANTHROPIC_API_KEY` is only needed for the direct-API fallback when mode is `llm`. |
 | **Outputs** | `GOOGLE_SHEET_ID`, `SLACK_WEBHOOK_URL` — optional. |
 
 String flag keys for Tier 2 prompt bodies are listed in `.env.example` and defined in `agents/wisdom_prompts.py` (`WISDOM_PROMPT_FLAG_KEYS`). Cypher overrides map to env suffixes in `WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY`.
@@ -96,7 +96,7 @@ flowchart LR
 ## LaunchDarkly
 
 - **Wisdom prompts** — Multivariate **string** flags (not JSON). Bootstrap: `python bootstrap/create_wisdom_string_flags.py` (requires `LD_API_KEY` and project env vars). See `bootstrap/wisdom_prompt_flag_defaults.py` for default copy.
-- **Prioritizer** — AI Config key defaults to `e100-prioritizer` (`E100_PRIORITIZER_AI_CONFIG_KEY`). Create/update via `python bootstrap/create_configs.py`. If the config is **disabled** in LD, the runner uses `merge_and_score` only (no LLM).
+- **Prioritizer** — AI Config key defaults to `e100-prioritizer` (`E100_PRIORITIZER_AI_CONFIG_KEY`). Set **`E100_PRIORITIZER_MODE=deterministic`** to never call the LLM (heuristic ranking only). Create/update the AI Config via `python bootstrap/create_configs.py`. If mode is `llm` and the config is **disabled** in LD, the runner falls back to `merge_and_score`. For **offline evaluations**, see [docs/prioritizer-offline-eval.md](docs/prioritizer-offline-eval.md) and `docs/examples/prioritizer_eval.sample.jsonl`.
 
 ## Enterpret Wisdom notes
 
@@ -120,8 +120,8 @@ run.py           # CLI entrypoint
 
 | Symptom | Things to check |
 |--------|------------------|
-| **Tier 2 loads 0 accounts** | `WISDOM_AUTH_TOKEN` valid; Enterpret not returning `ServiceError`; try **`WISDOM_CYPHER_*`** for `execute_cypher_query`; confirm string flags are **on** and non-empty in the environment matching `LD_SDK_KEY`. |
-| **Prioritizer errors** | Logs may show `ldai_langchain not found` — install optional LangChain provider packages if you use that path, or rely on direct Anthropic. HTTP **400** from Anthropic often means **billing/credits** or invalid model; **disable** the prioritizer AI Config in LaunchDarkly to use **`merge_and_score` only**. |
+| **Tier 2 loads 0 accounts** | `WISDOM_AUTH_TOKEN` valid; **`ServiceError`** / empty `error` often indicates an Enterpret graph or search outage—contact support if it persists. **`search_knowledge_graph`** frequently returns only `org_id` + echoed `query` (no account list); use **`WISDOM_CYPHER_*`** / **`WISDOM_CYPHER`** so Tier 2 calls **`execute_cypher_query`**. Confirm Wisdom string flags are **on** and non-empty for `LD_SDK_KEY`. |
+| **Prioritizer errors** | Set **`E100_PRIORITIZER_MODE=deterministic`** to skip the LLM entirely. If mode is `llm`, logs may show `ldai_langchain not found` — install optional LangChain provider packages if you use that path, or rely on direct Anthropic. HTTP **400** from Anthropic often means **billing/credits** or invalid model; or **disable** the prioritizer AI Config in LaunchDarkly to force **`merge_and_score`**. |
 | **Looker load fails** | `LOOKER_EXPORT_PATH` exists; CSV headers still match `EXPORT_COLUMN_MAP` in `agents/tier1_looker.py`. |
 
 ## Security

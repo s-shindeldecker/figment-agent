@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
-from agents.prioritizer import prioritize_with_ai_config
+from agents.prioritizer import prioritize_with_ai_config, prioritizer_llm_requested
 from agents.tier1_looker import Tier1LookerAgent
 from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_prompt_jobs
 from agents.tier3_stub import collect as collect_tier3
@@ -96,10 +96,17 @@ async def run_e100_refresh():
     deduped = deduplicate(combined)
     print(f"[Merge] {len(combined)} raw → {len(deduped)} after dedupe")
 
-    # ---- Prioritizer AI Config or deterministic scoring -------------------
-    final_list = await prioritize_with_ai_config(ai_client, context, deduped)
+    # ---- Prioritizer LLM (optional) or heuristic merge_and_score ----------
+    if prioritizer_llm_requested():
+        final_list = await prioritize_with_ai_config(ai_client, context, deduped)
+    else:
+        print(
+            "[Prioritizer] E100_PRIORITIZER_MODE=deterministic — "
+            "skipping LLM; using heuristic merge_and_score (core/scorer.py)"
+        )
+        final_list = None
     if final_list is None:
-        final_list = merge_and_score(combined)
+        final_list = merge_and_score(deduped)
 
     # ---- Outputs ---------------------------------------------------------
     _print_results(final_list)

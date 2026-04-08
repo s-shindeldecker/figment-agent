@@ -18,6 +18,28 @@ from core.schema import AccountRecord
 
 PRIORITIZER_AI_CONFIG_KEY = os.getenv("E100_PRIORITIZER_AI_CONFIG_KEY", "e100-prioritizer").strip()
 
+
+def prioritizer_llm_requested() -> bool:
+    """
+    When False, ``run.py`` skips the LaunchDarkly AI Config / Anthropic prioritizer and uses
+    ``merge_and_score`` (heuristic scoring in ``core/scorer.py``) only.
+
+    Env ``E100_PRIORITIZER_MODE``:
+      - ``llm`` (default if unset) — attempt LLM prioritization, then fall back on failure.
+      - ``deterministic`` / ``heuristic`` / ``off`` / ``0`` / ``false`` / ``no`` — never call the LLM.
+    """
+    raw = (os.getenv("E100_PRIORITIZER_MODE") or "llm").strip().lower()
+    if raw in ("deterministic", "heuristic", "off", "0", "false", "no"):
+        return False
+    if raw in ("llm", "ai", "on", "1", "true", "yes", "auto", ""):
+        return True
+    return True
+
+# User message prefix (after system / AI Config instructions). Kept stable for offline eval datasets.
+PRIORITIZER_USER_INTRO = (
+    "Merged account records (JSON). Assess and rank for GTM priority.\n"
+)
+
 _USER_PAYLOAD_SUFFIX = (
     "\n\nRespond with ONLY a JSON array (no markdown), same length as input accounts, "
     "one object per account you are ranking, ordered by final priority (best first). "
@@ -34,6 +56,16 @@ def _accounts_json(accounts: List[AccountRecord]) -> str:
         d = {k: v for k, v in asdict(a).items() if v is not None}
         rows.append(d)
     return json.dumps(rows, indent=2)
+
+
+def build_prioritizer_user_message(accounts: List[AccountRecord]) -> str:
+    """
+    Exact user-role content sent to the model (system = AI Config instructions).
+
+    Use this string as dataset ``input`` for LaunchDarkly offline evaluations when the
+    evaluation's AI Config already carries your agent instructions.
+    """
+    return PRIORITIZER_USER_INTRO + _accounts_json(accounts) + _USER_PAYLOAD_SUFFIX
 
 
 def apply_prioritizer_response(
@@ -170,11 +202,7 @@ async def prioritize_with_ai_config(
     system = (cfg.instructions or "").strip() or (
         "You prioritize B2B accounts for expansion. Output strict JSON only."
     )
-    user_body = (
-        "Merged account records (JSON). Assess and rank for GTM priority.\n"
-        + _accounts_json(accounts)
-        + _USER_PAYLOAD_SUFFIX
-    )
+    user_body = build_prioritizer_user_message(accounts)
 
     model_name = cfg.model.name if cfg.model else "claude-sonnet-4-20250514"
     text = ""

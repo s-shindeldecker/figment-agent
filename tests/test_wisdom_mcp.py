@@ -67,6 +67,41 @@ def test_records_success_false_returns_empty():
     assert records_from_wisdom_tool_result(result) == []
 
 
+def test_records_enterpret_nested_iserror_wrapper_returns_empty():
+    """Matches production: isError on wrapper, inner structuredContent has ServiceError."""
+    result = {
+        "structuredContent": {
+            "_meta": None,
+            "content": [],
+            "structuredContent": {
+                "success": False,
+                "error": "",
+                "error_type": "ServiceError",
+                "details": {},
+            },
+            "isError": True,
+        }
+    }
+    assert records_from_wisdom_tool_result(result) == []
+
+
+def test_records_success_true_metadata_only_returns_empty():
+    """search_knowledge_graph often echoes query without a results array."""
+    result = {
+        "structuredContent": {
+            "_meta": None,
+            "content": [],
+            "structuredContent": {
+                "success": True,
+                "org_id": "f9b684d0-bf1d-4afa-895c-3b80a6f338f6",
+                "query": "You guide Enterpret Wisdom queries…",
+            },
+            "isError": False,
+        }
+    }
+    assert records_from_wisdom_tool_result(result) == []
+
+
 def test_records_normalize_wrapped_entity():
     result = {
         "structuredContent": {

@@ -258,6 +258,28 @@ class WisdomMCPClient:
         return tools_result.get("tools") or []
 
 
+def _wisdom_tool_error_payload(result: dict) -> Optional[dict]:
+    """
+    Detect Enterpret error payloads. ``isError`` is often on a *wrapper* around
+    ``structuredContent``, not on the top-level MCP ``result``, so a plain
+    ``result.get("isError")`` misses real failures.
+    """
+    sc = result.get("structuredContent")
+    if not isinstance(sc, dict):
+        return None
+    inner = sc.get("structuredContent")
+    inner = inner if isinstance(inner, dict) else None
+    if sc.get("isError"):
+        if inner is not None:
+            return inner
+        return {"error_type": "unknown", "error": "isError wrapper with no inner payload"}
+    if inner is not None and inner.get("success") is False:
+        return inner
+    if inner is None and sc.get("success") is False:
+        return sc
+    return None
+
+
 def tool_result_to_text(result: dict) -> str:
     """Flatten MCP CallToolResult text content into a single string."""
     if result.get("isError"):
@@ -389,6 +411,19 @@ def records_from_wisdom_tool_result(result: dict) -> List[dict]:
     - JSON array in text content
     - list of dicts at top-level text JSON
     """
+    err_payload = _wisdom_tool_error_payload(result)
+    if err_payload is not None:
+        et = err_payload.get("error_type") or "?"
+        msg = err_payload.get("error") or err_payload.get("message") or ""
+        logger.error(
+            "Wisdom MCP tool error — error_type=%r message=%r details=%s "
+            "(no account rows for this query; Enterpret ServiceError is often upstream/graph)",
+            et,
+            msg,
+            err_payload.get("details"),
+        )
+        return []
+
     sc = _unwrap_structured_content(result)
     if not sc and isinstance(result.get("structuredContent"), dict):
         sc = result.get("structuredContent") or {}
@@ -404,6 +439,7 @@ def records_from_wisdom_tool_result(result: dict) -> List[dict]:
                 err,
                 list(sc.keys()),
             )
+            return []
         found = _dict_list_from_mapping(sc)
         if found:
             return found
