@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "figment-agent"
 version = "0.1.0"
-description = "E100 expansion list automation via LaunchDarkly Agent Graphs"
+description = "E100 expansion list pipeline: Looker, Enterpret Wisdom (MCP), LaunchDarkly, merge/score"
 requires-python = ">=3.9"
 dependencies = [
     "launchdarkly-server-sdk>=9.14",
