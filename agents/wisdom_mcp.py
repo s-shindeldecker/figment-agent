@@ -525,7 +525,8 @@ async def run_wisdom_query(
     """
     if cypher:
         tool_name = tool_override or "execute_cypher_query"
-        arg_keys = ["cypher", "query", "statement", "cypherQuery"]
+        # Enterpret Wisdom MCP expects snake_case ``cypher_query`` (Pydantic tool schema).
+        arg_keys = ["cypher_query", "cypher", "query", "statement", "cypherQuery"]
         last_err: Optional[Exception] = None
         for key in arg_keys:
             try:

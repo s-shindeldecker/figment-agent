@@ -1,5 +1,7 @@
 import csv
 import os
+from typing import Optional
+
 import requests
 from agents.base import AgentService
 from core.schema import AccountRecord
@@ -33,6 +35,72 @@ EXPORT_COLUMN_MAP = {
     "days_since_last_iteration": "By Account (Avg)",
     "active_experiments":        "Accounts With Active Experiments",
 }
+
+# CSV headers that map into AccountRecord typed fields (all others → looker_extras).
+_EXPORT_MAPPED_HEADERS = frozenset(EXPORT_COLUMN_MAP.values())
+
+
+def _csv_cell_to_extra_str(val) -> Optional[str]:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if s in ("", "null", "NULL", "N/A"):
+        return None
+    return s
+
+
+def _looker_extras_from_csv_row(row: dict) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for key, raw in row.items():
+        if key in _EXPORT_MAPPED_HEADERS:
+            continue
+        s = _csv_cell_to_extra_str(raw)
+        if s is not None:
+            out[key] = s
+    return out
+
+
+# API JSON keys consumed by _normalize_api_row (remaining keys → looker_extras).
+_LOOKER_API_MAPPED_KEYS = frozenset(
+    {
+        "salesforce_accounts.sfdc_account_name",
+        "salesforce_accounts.sfdc_account_id",
+        "salesforce_accounts.ld_account_id",
+        "salesforce_accounts.arr",
+        "salesforce_accounts.plan",
+        "salesforce_accounts.rating",
+        "salesforce_accounts.geo",
+        "salesforce_accounts.industry",
+        "salesforce_accounts.renewal_date",
+        "account_owner.name",
+        "customer_success_manager.name",
+        "active_customer_entitlement.experimentation_events_entitled_to",
+        "ld_account_experimentation_usage_daily.experimentation_events_received_mtd",
+        "ld_experiments_daily.days_since_most_recent_iteration_start_by_account_avg",
+    }
+)
+
+
+def _stringify_looker_api_value(val) -> Optional[str]:
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if isinstance(val, (int, float)):
+        return str(val)
+    s = str(val).strip()
+    return s if s else None
+
+
+def _looker_extras_from_api_row(row: dict) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for key, raw in row.items():
+        if key in _LOOKER_API_MAPPED_KEYS:
+            continue
+        s = _stringify_looker_api_value(raw)
+        if s is not None:
+            out[key] = s
+    return out
 
 
 class Tier1LookerAgent(AgentService):
@@ -156,6 +224,7 @@ class Tier1LookerAgent(AgentService):
             is_using_exp_90d=False,     # Export is already filtered to No
             days_since_last_iteration=to_float("days_since_last_iteration"),
             active_experiments=int(to_float("active_experiments") or 0) or None,
+            looker_extras=_looker_extras_from_csv_row(row),
         )
 
     # ------------------------------------------------------------------
@@ -245,4 +314,5 @@ class Tier1LookerAgent(AgentService):
             days_since_last_iteration=row.get(
                 "ld_experiments_daily.days_since_most_recent_iteration_start_by_account_avg"
             ),
+            looker_extras=_looker_extras_from_api_row(row),
         )

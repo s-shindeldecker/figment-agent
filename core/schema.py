@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Dict, Optional
 from datetime import datetime
 
 
@@ -53,3 +53,7 @@ class AccountRecord:
     # Metadata
     last_updated: str = field(default_factory=lambda: datetime.now().isoformat())
     notes: Optional[str] = None
+
+    # Unmapped / pass-through for wide export (Sheets manifest)
+    looker_extras: Dict[str, str] = field(default_factory=dict)
+    wisdom_extras: Dict[str, str] = field(default_factory=dict)

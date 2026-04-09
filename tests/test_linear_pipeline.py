@@ -1,72 +1,67 @@
 import pytest
 
-from bootstrap.wisdom_prompt_flag_defaults import assert_keys_align_with_codebase
-
 from agents.prioritizer import apply_prioritizer_response
-from agents.wisdom_prompts import WISDOM_PROMPT_FLAG_KEYS, resolve_wisdom_prompt_jobs
+from agents.wisdom_mcp import WisdomMCPError
+from agents.wisdom_prompts import (
+    WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY,
+    WISDOM_PROMPT_FLAG_KEYS,
+    WISDOM_TIER2_JOB_KEYS,
+    resolve_wisdom_prompt_jobs,
+)
 from core.merger import merge_and_score
 from core.schema import AccountRecord
 
 
-def test_resolve_wisdom_from_string_flags():
-    class MockLD:
-        def variation(self, key, context, default):
-            mapping = {
-                "e100-wisdom-prompt-competitive-displacement": "Query A body",
-                "e100-wisdom-prompt-switching-intent": "",
-                "e100-wisdom-prompt-eppo-coverage": "Query C body",
+def test_resolve_wisdom_prompt_jobs_two_jobs_from_settings(monkeypatch):
+    monkeypatch.setattr(
+        "agents.wisdom_prompts._read_settings_dict",
+        lambda: {
+            "wisdom": {
+                "tier2_prompt_fallback": "shared instructions for all jobs",
             }
-            return mapping.get(key, default)
-
-    jobs, src = resolve_wisdom_prompt_jobs(MockLD(), object())
-    assert src == "LaunchDarkly string flags"
-    assert jobs == [
-        ("e100-wisdom-prompt-competitive-displacement", "Query A body"),
-        ("e100-wisdom-prompt-eppo-coverage", "Query C body"),
-    ]
-
-
-def test_resolve_wisdom_flag_order_matches_wisdom_prompt_flag_keys():
-    """Non-empty flags appear in WISDOM_PROMPT_FLAG_KEYS order."""
-    keys = list(WISDOM_PROMPT_FLAG_KEYS)
-
-    class MockLD:
-        def variation(self, key, context, default):
-            if key == keys[2]:
-                return "third"
-            if key == keys[0]:
-                return "first"
-            return ""
-
-    jobs, _ = resolve_wisdom_prompt_jobs(MockLD(), object())
-    assert [j[0] for j in jobs] == [keys[0], keys[2]]
-    assert jobs[0][1] == "first"
-    assert jobs[1][1] == "third"
-
-
-def test_resolve_wisdom_yaml_fallback(monkeypatch):
-    monkeypatch.setattr(
-        "agents.wisdom_prompts._load_fallback_prompt_from_yaml",
-        lambda: "fallback prompt body",
+        },
     )
-    jobs, src = resolve_wisdom_prompt_jobs(None, None)
-    assert src == "settings.yaml"
-    assert jobs == [("settings.yaml", "fallback prompt body")]
+    jobs, src = resolve_wisdom_prompt_jobs()
+    assert src == "config/settings.yaml"
+    assert len(jobs) == 2
+    assert [j[0] for j in jobs] == list(WISDOM_TIER2_JOB_KEYS)
+    assert all(j[1] == "shared instructions for all jobs" for j in jobs)
 
 
-def test_resolve_wisdom_all_flags_empty_uses_yaml(monkeypatch):
+def test_resolve_wisdom_tier2_prompts_override_per_job(monkeypatch):
+    keys = list(WISDOM_TIER2_JOB_KEYS)
     monkeypatch.setattr(
-        "agents.wisdom_prompts._load_fallback_prompt_from_yaml",
-        lambda: "yaml only",
+        "agents.wisdom_prompts._read_settings_dict",
+        lambda: {
+            "wisdom": {
+                "tier2_prompt_fallback": "default",
+                "tier2_prompts": {
+                    keys[0]: "competitive only",
+                    keys[1]: "",
+                },
+            }
+        },
     )
+    jobs, _ = resolve_wisdom_prompt_jobs()
+    assert jobs[0][1] == "competitive only"
+    assert jobs[1][1] == "default"
 
-    class MockLD:
-        def variation(self, key, context, default):
-            return ""
 
-    jobs, src = resolve_wisdom_prompt_jobs(MockLD(), object())
-    assert src == "settings.yaml"
-    assert jobs == [("settings.yaml", "yaml only")]
+def test_resolve_wisdom_missing_prompt_raises(monkeypatch):
+    monkeypatch.setattr(
+        "agents.wisdom_prompts._read_settings_dict",
+        lambda: {"wisdom": {}},
+    )
+    with pytest.raises(WisdomMCPError, match="tier2_prompt"):
+        resolve_wisdom_prompt_jobs()
+
+
+def test_wisdom_tier2_job_keys_alias_matches_flag_keys_tuple():
+    assert WISDOM_PROMPT_FLAG_KEYS == WISDOM_TIER2_JOB_KEYS
+
+
+def test_wisdom_cypher_env_suffixes_align_with_job_keys():
+    assert set(WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY) == set(WISDOM_TIER2_JOB_KEYS)
 
 
 def test_apply_prioritizer_response_sets_ranks():
@@ -83,10 +78,6 @@ def test_apply_prioritizer_response_sets_ranks():
     assert out[0].priority_rank == 1 and out[0].expansion_score == 9.0
     assert out[0].notes == "hot"
     assert out[1].priority_rank == 2
-
-
-def test_wisdom_bootstrap_defaults_align_with_wisdom_prompts():
-    assert_keys_align_with_codebase()
 
 
 def test_merge_and_score_fallback_without_prioritizer():

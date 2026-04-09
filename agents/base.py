@@ -1,16 +1,8 @@
-def init_ld_clients(sdk_key: str) -> tuple:
-    import ldai
-    import ldclient
-    from ldclient.config import Config
-    ldclient.set_config(Config(sdk_key))
-    ld_client = ldclient.get()
-    ai_client = ldai.client.LDAIClient(ld_client)
-    return ld_client, ai_client
-
-
 class AgentService:
     """
-    Base class for E100 agents that may read LaunchDarkly AI Configs or flags.
+    Base class for E100 tier agents.
+
+    ``ai_client`` and ``context`` are optional legacy hooks (unused in the linear pipeline).
 
     The optional ``graph`` parameter is legacy (Agent Graph); the linear pipeline passes ``None``.
     """
@@ -36,16 +28,16 @@ class AgentService:
         return cfg.instructions
 
     def log_graph_binding(self):
-        """No-op when graph is unused; kept for subclasses that may log LD binding."""
+        """No-op when graph is unused; kept for subclasses that may log config binding."""
         if self.graph is None:
             return
         node = self.get_node()
         if node is None:
-            print(f"[LD/Graph] {self.config_key}: no node for this config key")
+            print(f"[Graph] {self.config_key}: no node for this config key")
             return
         instr = self.get_instructions()
         n = len(instr) if instr else 0
-        print(f"[LD/Graph] {self.config_key}: node bound ({n} chars instructions)")
+        print(f"[Graph] {self.config_key}: node bound ({n} chars instructions)")
 
     async def run(self) -> list:
         """Override in subclass. Returns list of AccountRecord."""

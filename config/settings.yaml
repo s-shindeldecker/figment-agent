@@ -31,7 +31,8 @@ output:
   sheets_tab: "E100 Master"
   top_n_slack_digest: 10
 
-# Used when LD_SDK_KEY is unset or all three Wisdom string flags are empty (see .env.example).
+# Tier 2 Wisdom: prompt text for search_knowledge_graph fallback (when Cypher is unset).
+# Applied to both Tier-2 jobs unless overridden under tier2_prompts.<job_key>.
 wisdom:
   tier2_prompt_fallback: |
     You are the Tier 2 competitive intelligence agent using Enterpret Wisdom (Knowledge Graph).
@@ -41,8 +42,6 @@ wisdom:
       frequency, and whether they are evaluating, frustrated, or actively using a competitor
       alongside LaunchDarkly.
     - Strongest signals of dissatisfaction or switching intent for accounts on Statsig/Eppo.
-    - Eppo mentions in Gong or Zendesk and whether Eppo is expanding inside existing LD relationships.
-
     Normalize urgency as: immediate (active switching intent), active (evaluating), watch (mentioned only).
 
     When the tool response allows, return a JSON array of objects:

@@ -1,10 +1,14 @@
 .env
 config/google_service_account.json
+# GCP-downloaded service account keys (do not commit)
+config/*.json
 data/looker_export.csv
 __pycache__/
 *.py[cod]
 .venv/
 .DS_Store
+# Local Wisdom schema dump (may contain org-specific data)
+get_schema_out.txt
 .claude/
 dist/
 *.egg-info/

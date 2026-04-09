@@ -2,8 +2,7 @@
 Heuristic expansion signals for E100 ranking (no LLM).
 
 Weights come from ``config/settings.yaml`` scoring section where mirrored in constants
-below. Used by ``merge_and_score`` when ``E100_PRIORITIZER_MODE=deterministic`` or when
-the LLM prioritizer is disabled / fails.
+below. ``run.py`` always ranks via ``merge_and_score`` / this module.
 """
 from core.schema import AccountRecord
 

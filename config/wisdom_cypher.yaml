@@ -1,0 +1,140 @@
+# Default Enterpret Wisdom Cypher for Tier-2 jobs.
+# Competitive + switching: two queries each (Gong, Zendesk).
+# Override: WISDOM_CYPHER_<SUFFIX> (single string replaces the whole job, no Gong/Zendesk split).
+# Disable embedded: WISDOM_DISABLE_EMBEDDED_CYPHER=1
+
+competitive_displacement_gong: |
+  MATCH (nli:NaturalLanguageInteraction)
+  WHERE nli.source CONTAINS 'Gong'
+    AND nli.record_timestamp >= now() - INTERVAL 1 YEAR
+    AND (
+      nli.content CONTAINS 'Statsig' OR nli.content CONTAINS 'Optimizely' OR
+      nli.content CONTAINS 'Eppo' OR nli.content CONTAINS 'AB Tasty' OR
+      nli.content CONTAINS 'VWO' OR nli.content CONTAINS 'Split.io' OR
+      nli.content CONTAINS 'GrowthBook' OR nli.content CONTAINS 'Kameleoon' OR
+      nli.content CONTAINS 'Adobe Target'
+    )
+  RETURN
+    nli.gong_account_account_name AS account_name,
+    CASE
+      WHEN nli.content CONTAINS 'Statsig' THEN 'Statsig'
+      WHEN nli.content CONTAINS 'Optimizely' THEN 'Optimizely'
+      WHEN nli.content CONTAINS 'Eppo' THEN 'Eppo'
+      WHEN nli.content CONTAINS 'AB Tasty' THEN 'AB Tasty'
+      WHEN nli.content CONTAINS 'VWO' THEN 'VWO'
+      WHEN nli.content CONTAINS 'Split.io' THEN 'Split.io'
+      WHEN nli.content CONTAINS 'GrowthBook' THEN 'GrowthBook'
+      WHEN nli.content CONTAINS 'Kameleoon' THEN 'Kameleoon'
+      WHEN nli.content CONTAINS 'Adobe Target' THEN 'Adobe Target'
+      ELSE 'Multiple'
+    END AS primary_competitor,
+    COUNT(DISTINCT nli.record_id) AS mention_count,
+    'Gong' AS source,
+    MAX(nli.gong_account_account_arr_c) AS arr,
+    MAX(nli.gong_account_account_experimentation_amount_c) AS experimentation_arr,
+    MAX(nli.gong_account_account_plan_c) AS plan,
+    MAX(nli.gong_account_account_renewal_date_c) AS renewal_date,
+    MAX(nli.gong_account_opportunity_competition_notes_c) AS competition_notes,
+    MAX(nli.gong_account_opportunity_stagename) AS opp_stage,
+    MAX(nli.gong_account_opportunity_amount) AS opp_amount,
+    MAX(nli.gong_account_opportunity_closedate) AS opp_close_date,
+    MAX(nli.gong_account_opportunity_champion_c) AS champion,
+    MAX(nli.gong_account_opportunity_technical_blockers_c) AS blockers,
+    'competitive_displacement' AS source_query
+  ORDER BY mention_count DESC
+  LIMIT 50
+
+competitive_displacement_zendesk: |
+  MATCH (nli:NaturalLanguageInteraction)
+  WHERE nli.source CONTAINS 'Zendesk'
+    AND nli.record_timestamp >= now() - INTERVAL 1 YEAR
+    AND (
+      nli.content CONTAINS 'Statsig' OR nli.content CONTAINS 'Optimizely' OR
+      nli.content CONTAINS 'Eppo' OR nli.content CONTAINS 'AB Tasty' OR
+      nli.content CONTAINS 'VWO' OR nli.content CONTAINS 'Split.io' OR
+      nli.content CONTAINS 'GrowthBook' OR nli.content CONTAINS 'Kameleoon' OR
+      nli.content CONTAINS 'Adobe Target'
+    )
+  RETURN
+    nli.zendesksupport_organization_name AS account_name,
+    CASE
+      WHEN nli.content CONTAINS 'Statsig' THEN 'Statsig'
+      WHEN nli.content CONTAINS 'Optimizely' THEN 'Optimizely'
+      WHEN nli.content CONTAINS 'Eppo' THEN 'Eppo'
+      WHEN nli.content CONTAINS 'AB Tasty' THEN 'AB Tasty'
+      WHEN nli.content CONTAINS 'VWO' THEN 'VWO'
+      WHEN nli.content CONTAINS 'Split.io' THEN 'Split.io'
+      WHEN nli.content CONTAINS 'GrowthBook' THEN 'GrowthBook'
+      WHEN nli.content CONTAINS 'Kameleoon' THEN 'Kameleoon'
+      WHEN nli.content CONTAINS 'Adobe Target' THEN 'Adobe Target'
+      ELSE 'Multiple'
+    END AS primary_competitor,
+    COUNT(DISTINCT nli.record_id) AS mention_count,
+    'Zendesk' AS source,
+    MAX(nli.zendesksupport_organization_account_arr) AS arr,
+    MAX(nli.zendesksupport_organization_plan) AS plan,
+    MAX(nli.zendesksupport_organization_2024_support_tier) AS support_tier,
+    MAX(nli.zendesksupport_organization_csm_name) AS csm_name,
+    MAX(nli.zendesksupport_organization_customer_region) AS customer_region,
+    'competitive_displacement' AS source_query
+  ORDER BY mention_count DESC
+  LIMIT 50
+
+switching_intent_gong: |
+  MATCH (nli:NaturalLanguageInteraction)
+  WHERE nli.source CONTAINS 'Gong'
+    AND nli.record_timestamp >= now() - INTERVAL 1 YEAR
+    AND (nli.content CONTAINS 'Statsig' OR nli.content CONTAINS 'Eppo')
+    AND (
+      nli.content CONTAINS 'switch' OR nli.content CONTAINS 'replac' OR
+      nli.content CONTAINS 'evaluat' OR nli.content CONTAINS 'migrat' OR
+      nli.content CONTAINS 'moving from' OR nli.content CONTAINS 'moving to' OR
+      nli.content CONTAINS 'instead of' OR nli.content CONTAINS 'dissatisf' OR
+      nli.content CONTAINS 'frustrat' OR nli.content CONTAINS 'consolidat'
+    )
+  RETURN
+    nli.gong_account_account_name AS account_name,
+    CASE
+      WHEN nli.content CONTAINS 'Statsig' AND nli.content CONTAINS 'Eppo' THEN 'Statsig + Eppo'
+      WHEN nli.content CONTAINS 'Statsig' THEN 'Statsig'
+      ELSE 'Eppo'
+    END AS competitor,
+    COUNT(DISTINCT nli.record_id) AS signal_count,
+    'Gong' AS source,
+    MAX(nli.gong_account_account_arr_c) AS arr,
+    MAX(nli.gong_account_account_experimentation_amount_c) AS experimentation_arr,
+    MAX(nli.gong_account_account_plan_c) AS plan,
+    MAX(nli.gong_account_account_renewal_date_c) AS renewal_date,
+    MAX(nli.gong_account_opportunity_competition_notes_c) AS competition_notes,
+    MAX(nli.gong_account_opportunity_stagename) AS opp_stage,
+    MAX(nli.gong_account_opportunity_amount) AS opp_amount,
+    MAX(nli.gong_account_opportunity_closedate) AS opp_close_date,
+    MAX(nli.gong_account_opportunity_champion_c) AS champion,
+    MAX(nli.gong_account_opportunity_technical_blockers_c) AS blockers,
+    'switching_intent' AS source_query
+  HAVING signal_count >= 1
+  ORDER BY signal_count DESC
+  LIMIT 50
+
+switching_intent_zendesk: |
+  MATCH (nli:NaturalLanguageInteraction)
+  WHERE nli.source CONTAINS 'Zendesk'
+    AND nli.record_timestamp >= now() - INTERVAL 1 YEAR
+    AND (nli.content CONTAINS 'Statsig' OR nli.content CONTAINS 'Eppo')
+  RETURN
+    nli.zendesksupport_organization_name AS account_name,
+    CASE
+      WHEN nli.content CONTAINS 'Statsig' AND nli.content CONTAINS 'Eppo' THEN 'Statsig + Eppo'
+      WHEN nli.content CONTAINS 'Statsig' THEN 'Statsig'
+      ELSE 'Eppo'
+    END AS competitor,
+    COUNT(DISTINCT nli.record_id) AS signal_count,
+    'Zendesk' AS source,
+    MAX(nli.zendesksupport_organization_account_arr) AS arr,
+    MAX(nli.zendesksupport_organization_plan) AS plan,
+    MAX(nli.zendesksupport_organization_2024_support_tier) AS support_tier,
+    MAX(nli.zendesksupport_organization_csm_name) AS csm_name,
+    MAX(nli.zendesksupport_organization_customer_region) AS customer_region,
+    'switching_intent' AS source_query
+  ORDER BY signal_count DESC
+  LIMIT 50

@@ -1,0 +1,66 @@
+# Column order for E100 Master (Google Sheets). Align with Experimentation E100 xlsx + live
+# Looker CSV by editing headers / looker_extra / wisdom_extra keys. Run:
+#   python scripts/dump_looker_csv_headers.py <path/to/export.csv>
+# to list CSV headers for mapping.
+
+columns:
+  - header: "Priority Rank"
+    field: priority_rank
+  - header: "Account Name"
+    field: account_name
+  - header: "Tier"
+    field: tier
+  - header: "Urgency"
+    field: urgency
+    default: "active"
+  - header: "ARR"
+    field: arr
+  - header: "Plan"
+    field: plan
+  - header: "Geo"
+    field: geo
+  - header: "Industry"
+    field: industry
+  - header: "Expansion Score"
+    field: expansion_score
+  - header: "AE"
+    field: ae
+  - header: "CSM"
+    field: csm
+  - header: "Competitor"
+    field: competitor
+  - header: "Competitor Spend"
+    field: competitor_spend
+  - header: "Exp Events MTD"
+    field: exp_events_mtd
+  - header: "Entitlement"
+    field: exp_events_entitled
+  - header: "Utilisation Rate"
+    field: exp_utilisation_rate
+    format: percent_0_1
+  - header: "Days Since Last Experiment"
+    field: days_since_last_iteration
+  - header: "Active Experiments"
+    field: active_experiments
+  - header: "Renewal Date"
+    field: renewal_date
+  # Must match the Looker CSV column title if present; adjust after header dump / xlsx compare.
+  - header: "Open Opportunities"
+    looker_extra: "Open Opportunities"
+  - header: "Deal Context"
+    field: deal_context
+  - header: "Source"
+    field: source
+  - header: "Override"
+    field: override_action
+  - header: "Notes"
+    field: notes
+  - header: "Last Updated"
+    field: last_updated
+  # Common Wisdom Cypher aliases (optional wide columns); empty if not in RETURN.
+  - header: "Wisdom: mention_count"
+    wisdom_extra: mention_count
+  - header: "Wisdom: signal_count"
+    wisdom_extra: signal_count
+  - header: "Wisdom: source_query"
+    wisdom_extra: source_query
