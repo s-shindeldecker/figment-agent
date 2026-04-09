@@ -3,6 +3,8 @@ config/google_service_account.json
 # GCP-downloaded service account keys (do not commit)
 config/*.json
 data/looker_export.csv
+data/figment_t3_competitor_tech.csv
+data/figment_t3_analytic_cms.csv
 __pycache__/
 *.py[cod]
 .venv/
