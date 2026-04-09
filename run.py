@@ -7,7 +7,8 @@ load_dotenv()
 
 from agents.tier1_looker import Tier1LookerAgent
 from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_prompt_jobs
-from agents.tier3_stub import collect as collect_tier3
+from agents.tier3_web import collect as collect_tier3_web
+from agents.tier3_zoominfo import Tier3ZoomInfoAgent, COMPETITOR_TECH_PATH, ANALYTIC_CMS_PATH
 from agents.wisdom_prompts import resolve_wisdom_prompt_jobs
 from core.merger import merge_and_score
 
@@ -60,9 +61,19 @@ async def run_e100_refresh():
     else:
         print("[Tier2] Skipping — WISDOM_AUTH_TOKEN not set")
 
-    # ---- Tier 3: stub ------------------------------------------------------
-    tier3_accounts = await collect_tier3()
-    combined.extend(tier3_accounts)
+    # ---- Tier 3a: ZoomInfo exports (competitor tech + analytics/CMS) -------
+    zi_files_present = os.path.exists(COMPETITOR_TECH_PATH) or os.path.exists(ANALYTIC_CMS_PATH)
+    if zi_files_present:
+        zi_agent = Tier3ZoomInfoAgent(None, "e100-tier3-zoominfo", None)
+        tier3_zi_accounts = await zi_agent.run()
+        print(f"[Tier3/ZoomInfo] {len(tier3_zi_accounts)} accounts loaded")
+        combined.extend(tier3_zi_accounts)
+    else:
+        print("[Tier3/ZoomInfo] Skipping — no export files found in data/")
+
+    # ---- Tier 3b: allowlisted web (TIER3_WEB_ENABLED=1, config/tier3_sources.yaml)
+    tier3_web_accounts = await collect_tier3_web()
+    combined.extend(tier3_web_accounts)
 
     # ---- Merge by account + rank -----------------------------------------
     print("[Prioritizer] Deterministic merge_and_score (core/scorer.py)")
