@@ -119,8 +119,10 @@ def _write_manifest_to_worksheet(
     accounts: List[AccountRecord],
     columns: List[Dict[str, Any]],
     delta_by_key: Optional[Dict[str, str]] = None,
+    *,
+    headers: Optional[List[str]] = None,
 ) -> None:
-    headers = list(manifest_headers(columns))
+    hdrs = list(headers) if headers is not None else list(manifest_headers(columns))
     name_i = account_name_column_index(columns) if delta_by_key else None
     data_rows: List[List[Any]] = []
     for acct in accounts:
@@ -130,8 +132,8 @@ def _write_manifest_to_worksheet(
             row.append(delta_by_key.get(key, ""))
         data_rows.append(row)
     if delta_by_key is not None:
-        headers.append("Δ")
-    values = [headers] + data_rows
+        hdrs.append("Δ")
+    values = [hdrs] + data_rows
     sheet.clear()
     sheet.update(
         range_name="A1",
@@ -171,6 +173,7 @@ def write_to_sheets_by_tier(
     spreadsheet = _authorize_spreadsheet(sheet_id)
 
     headers = manifest_headers(columns)
+    headers_tier3 = manifest_headers(columns, worksheet="tier3")
     curr_tabs: Dict[str, Dict[str, List[str]]] = {
         "tier1": row_dict_from_accounts(tier1_accounts, columns),
         "tier2": row_dict_from_accounts(tier2_accounts, columns),
@@ -190,7 +193,13 @@ def write_to_sheets_by_tier(
     changes_for_changelog = (
         []
         if first_run
-        else diff_snapshots(prev_tabs, curr_tabs, headers, titles)
+        else diff_snapshots(
+            prev_tabs,
+            curr_tabs,
+            headers,
+            titles,
+            headers_by_logical_tab={"tier3": headers_tier3},
+        )
     )
 
     mark = sheet_mark_changes_enabled()
@@ -224,7 +233,10 @@ def write_to_sheets_by_tier(
                 curr_tabs[label],
                 ncol,
             )
-        _write_manifest_to_worksheet(sheet, rows, columns, delta_by_key=delta)
+        tab_headers = headers_tier3 if label == "tier3" else None
+        _write_manifest_to_worksheet(
+            sheet, rows, columns, delta_by_key=delta, headers=tab_headers
+        )
 
     if write_merged_master_enabled() and merged_accounts is not None:
         tab = titles["merged"]

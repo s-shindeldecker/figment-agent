@@ -1,59 +1,21 @@
 import pytest
 
 from agents.prioritizer import apply_prioritizer_response
-from agents.wisdom_mcp import WisdomMCPError
+from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_tier2_jobs
 from agents.wisdom_prompts import (
     WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY,
     WISDOM_PROMPT_FLAG_KEYS,
     WISDOM_TIER2_JOB_KEYS,
-    resolve_wisdom_prompt_jobs,
+    tier2_job_keys,
 )
 from core.merger import merge_and_score
 from core.schema import AccountRecord
 
 
-def test_resolve_wisdom_prompt_jobs_two_jobs_from_settings(monkeypatch):
-    monkeypatch.setattr(
-        "agents.wisdom_prompts._read_settings_dict",
-        lambda: {
-            "wisdom": {
-                "tier2_prompt_fallback": "shared instructions for all jobs",
-            }
-        },
-    )
-    jobs, src = resolve_wisdom_prompt_jobs()
-    assert src == "config/settings.yaml+ld"
-    assert len(jobs) == 2
-    assert [j[0] for j in jobs] == list(WISDOM_TIER2_JOB_KEYS)
-    assert all(j[1] == "shared instructions for all jobs" for j in jobs)
-
-
-def test_resolve_wisdom_tier2_prompts_override_per_job(monkeypatch):
-    keys = list(WISDOM_TIER2_JOB_KEYS)
-    monkeypatch.setattr(
-        "agents.wisdom_prompts._read_settings_dict",
-        lambda: {
-            "wisdom": {
-                "tier2_prompt_fallback": "default",
-                "tier2_prompts": {
-                    keys[0]: "competitive only",
-                    keys[1]: "",
-                },
-            }
-        },
-    )
-    jobs, _ = resolve_wisdom_prompt_jobs()
-    assert jobs[0][1] == "competitive only"
-    assert jobs[1][1] == "default"
-
-
-def test_resolve_wisdom_missing_prompt_raises(monkeypatch):
-    monkeypatch.setattr(
-        "agents.wisdom_prompts._read_settings_dict",
-        lambda: {"wisdom": {}},
-    )
-    with pytest.raises(WisdomMCPError, match="tier2_prompt"):
-        resolve_wisdom_prompt_jobs()
+def test_tier2_job_keys_order_and_count():
+    keys = tier2_job_keys()
+    assert keys == list(WISDOM_TIER2_JOB_KEYS)
+    assert len(keys) == 2
 
 
 def test_wisdom_tier2_job_keys_alias_matches_flag_keys_tuple():
@@ -64,52 +26,22 @@ def test_wisdom_cypher_env_suffixes_align_with_job_keys():
     assert set(WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY) == set(WISDOM_TIER2_JOB_KEYS)
 
 
-def test_resolve_wisdom_ld_prompt_fallback_overrides_yaml(monkeypatch):
-    import agents.wisdom_prompts as wp
-
+@pytest.mark.asyncio
+async def test_execute_wisdom_tier2_jobs_raises_when_no_cypher(monkeypatch):
+    monkeypatch.setenv("WISDOM_AUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("WISDOM_DISABLE_EMBEDDED_CYPHER", "1")
+    monkeypatch.delenv("WISDOM_CYPHER_COMPETITIVE_DISPLACEMENT", raising=False)
+    monkeypatch.delenv("WISDOM_CYPHER_SWITCHING_INTENT", raising=False)
+    monkeypatch.delenv("WISDOM_CYPHER", raising=False)
     monkeypatch.setattr(
-        wp,
-        "get_wisdom_prompts_overlay_from_ld",
-        lambda: {"tier2_prompt_fallback": "instructions from LaunchDarkly"},
+        "agents.ld_wisdom_config.get_wisdom_cypher_ld_overlay",
+        lambda: {},
     )
-    monkeypatch.setattr(
-        wp,
-        "_read_settings_dict",
-        lambda: wp._merge_wisdom_ld_overlay(
-            {"wisdom": {"tier2_prompt_fallback": "yaml fallback"}}
-        ),
-    )
-    jobs, src = resolve_wisdom_prompt_jobs()
-    assert src == "config/settings.yaml+ld"
-    assert all(j[1] == "instructions from LaunchDarkly" for j in jobs)
+    from agents.wisdom_cypher_defaults import reload_wisdom_cypher_defaults_for_tests
 
-
-def test_resolve_wisdom_ld_tier2_prompts_merge_with_yaml(monkeypatch):
-    import agents.wisdom_prompts as wp
-
-    keys = list(WISDOM_TIER2_JOB_KEYS)
-    monkeypatch.setattr(
-        wp,
-        "get_wisdom_prompts_overlay_from_ld",
-        lambda: {
-            "tier2_prompts": {keys[1]: "switching from LD"},
-        },
-    )
-    monkeypatch.setattr(
-        wp,
-        "_read_settings_dict",
-        lambda: wp._merge_wisdom_ld_overlay(
-            {
-                "wisdom": {
-                    "tier2_prompt_fallback": "shared",
-                    "tier2_prompts": {keys[0]: "competitive yaml"},
-                }
-            }
-        ),
-    )
-    jobs, _ = resolve_wisdom_prompt_jobs()
-    assert jobs[0][1] == "competitive yaml"
-    assert jobs[1][1] == "switching from LD"
+    reload_wisdom_cypher_defaults_for_tests()
+    with pytest.raises(WisdomMCPError, match="Tier 2 requires Cypher"):
+        await execute_wisdom_tier2_jobs(tier2_job_keys(), log_prefix="[Tier2]")
 
 
 def test_apply_prioritizer_response_sets_ranks():

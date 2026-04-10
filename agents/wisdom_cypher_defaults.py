@@ -3,8 +3,8 @@ Embedded default Cypher for Tier-2 Wisdom jobs (config/wisdom_cypher.yaml).
 
 Resolved when env WISDOM_CYPHER_* is unset. Disabled with WISDOM_DISABLE_EMBEDDED_CYPHER=1.
 
-LaunchDarkly JSON flag (optional, see agents.ld_wisdom_config) overlays the same keys from YAML;
-per-key LD values win. WISDOM_DISABLE_LD_CYPHER=1 skips the LD overlay.
+LaunchDarkly: one JSON flag per wisdom map key (see agents.ld_wisdom_config); overlays YAML per key.
+WISDOM_DISABLE_LD_CYPHER=1 skips all LD Cypher reads.
 
 Competitive displacement and switching intent use **two** embedded queries each (Gong + Zendesk).
 Override a whole job with a single env string (WISDOM_CYPHER_COMPETITIVE_DISPLACEMENT, etc.)
@@ -67,7 +67,7 @@ def _load_yaml_cypher_map() -> Dict[str, str]:
     base: Dict[str, str] = {}
     if not _embedded_disabled():
         base = _read_cypher_map_from_yaml_file()
-    ld_map = _ld_wisdom_config.get_wisdom_cypher_map_from_ld()
+    ld_map = _ld_wisdom_config.get_wisdom_cypher_ld_overlay()
     merged = {**base, **ld_map}
     _cache = merged
     return merged
@@ -89,7 +89,7 @@ def describe_embedded_cypher_key_sources(ld_suffix: str) -> List[Tuple[str, str]
     if not keys:
         return []
     merged = _load_yaml_cypher_map()
-    ld_map = _ld_wisdom_config.get_wisdom_cypher_map_from_ld()
+    ld_map = _ld_wisdom_config.get_wisdom_cypher_ld_overlay()
     out: List[Tuple[str, str]] = []
     for k in keys:
         if not (merged.get(k) or "").strip():

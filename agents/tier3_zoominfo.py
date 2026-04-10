@@ -57,6 +57,7 @@ COLUMN_MAP = {
     "account_name": "Company Name",
     "industry":     "Primary Industry",
     "geo":          "Company Country",
+    # Maps to AccountRecord.arr for scoring/export; Sheets Tier 3 column uses tier3_header (company revenue, not LD ARR).
     "arr":          "Revenue (in 000s USD)",   # in thousands — multiplied ×1000 in normalize
     "notes":        "Query Name",              # the ZoomInfo search/list that produced this row
 }

@@ -5,7 +5,7 @@ Python pipeline that builds the **E100 expansion account list**: Tier 1 usage da
 ## What it does
 
 1. **Tier 1 — Looker** — Loads accounts from a CSV export (`LOOKER_EXPORT_PATH`) or, when configured, from the Looker API.
-2. **Tier 2 — Enterpret Wisdom** — If `WISDOM_AUTH_TOKEN` is set, runs Wisdom MCP jobs using prompts from `config/settings.yaml` (with optional LaunchDarkly JSON overlay) and Cypher from `config/wisdom_cypher.yaml` merged with optional LaunchDarkly JSON (see below).
+2. **Tier 2 — Enterpret Wisdom** — If `WISDOM_AUTH_TOKEN` is set, runs **`execute_cypher_query` only** (no prose / `search_knowledge_graph`). Cypher comes from [`config/wisdom_cypher.yaml`](config/wisdom_cypher.yaml) merged with optional **per-query** LaunchDarkly JSON flags, or from `WISDOM_CYPHER_*` / `WISDOM_CYPHER` env vars. **Cypher is required** for every Tier-2 job or the run fails fast.
 3. **Tier 3** — Optional allowlisted web fetch (`TIER3_WEB_ENABLED=1`, [`config/tier3_sources.yaml`](config/tier3_sources.yaml)): keyword/competitor hits in page text → `AccountRecord` (`tier=3`). Crawl depth / JS rendering are future work.
 4. **Merge** — Deduplicates by account name and merges tier signals.
 5. **Rank** — `merge_and_score()` using weights in `config/settings.yaml`, then a **summary list** (default up to **100** accounts: **50 / 25 / 25** by merged `tier`, with score-based backfill if a tier is short). Tier tabs stay **full** lists; console, Slack, and the optional **E100 Summary** sheet use the summary. Override with `E100_SUMMARY_USE_FULL_MERGE=1` or `output.e100_summary` in `config/settings.yaml`.
@@ -14,7 +14,7 @@ Python pipeline that builds the **E100 expansion account list**: Tier 1 usage da
 ## Requirements
 
 - Python **3.9+**
-- Dependencies: see `pyproject.toml` (`httpx`, `gspread`, `pyyaml`, etc.). Optional: `pip install -e ".[launchdarkly]"` for LaunchDarkly-backed Wisdom Cypher/prompt overlays.
+- Dependencies: see `pyproject.toml` (`httpx`, `gspread`, `pyyaml`, etc.). Optional: `pip install -e ".[launchdarkly]"` for LaunchDarkly-backed Wisdom Cypher (per-query flags).
 
 ## Quick start
 
@@ -42,7 +42,7 @@ Copy `.env.example` to `.env`. Important groups:
 | Area | Variables |
 |------|-----------|
 | **Looker** | `LOOKER_EXPORT_PATH` — path to exported CSV (file mode). For API mode, see `agents/tier1_looker.py` and unset `LOOKER_EXPORT_PATH`. |
-| **Wisdom MCP** | `WISDOM_AUTH_TOKEN` — [Bearer token from Enterpret](https://helpcenter.enterpret.com/en/articles/12665166-wisdom-mcp-server). Optional: `WISDOM_SERVER_URL`, `WISDOM_TIER2_PARALLEL`, `WISDOM_CYPHER_*`, `WISDOM_TIER2_TOOL`, LaunchDarkly (`LD_SDK_KEY`, `LD_PROJECT_KEY`, `LD_ENV_KEY`, etc. — see `.env.example`). |
+| **Wisdom MCP** | `WISDOM_AUTH_TOKEN` — [Bearer token from Enterpret](https://helpcenter.enterpret.com/en/articles/12665166-wisdom-mcp-server). Cypher-only Tier 2. Optional: `WISDOM_SERVER_URL`, `WISDOM_TIER2_PARALLEL`, `WISDOM_CYPHER_*`, `WISDOM_TIER2_TOOL`, LaunchDarkly per-query flags (`LD_SDK_KEY`, `LD_FLAG_CYPHER_*`, etc. — see `.env.example`). |
 | **Outputs** | `GOOGLE_SHEET_ID` (tab names hardcoded in `outputs/sheets_writer.py`; `E100_WRITE_MERGED_MASTER` for summary), `SLACK_WEBHOOK_URL` — optional. Summary quotas: `E100_SUMMARY_USE_FULL_MERGE`, `E100_SUMMARY_TIER*_MAX`. |
 
 Tier 2 uses two stable **job keys** in `agents/wisdom_prompts.py` (`WISDOM_TIER2_JOB_KEYS`) for logging and Cypher env overrides (`WISDOM_CYPHER_<SUFFIX>` via `WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY`). Each job runs Gong + Zendesk embedded Cypher from `wisdom_cypher.yaml`.
@@ -51,7 +51,7 @@ Tier 2 uses two stable **job keys** in `agents/wisdom_prompts.py` (`WISDOM_TIER2
 
 - **`scoring`** — Weights for deterministic `merge_and_score` (`core/scorer.py`).
 - **`thresholds`**, **`schedule`**, **`output`** — Includes `e100_summary` quotas; Sheet tab titles live in code (`outputs/sheets_writer.py`).
-- **`wisdom.tier2_prompt_fallback`** (or **`tier2_prompt_default`**) — Shared prompt text for both Tier-2 jobs (search fallback when Cypher is unset). Optional **`wisdom.tier2_prompts.<job_key>`** overrides per job. The same fields can be overridden at runtime by the LaunchDarkly JSON flag **`figment-wisdom-tier2-prompts`** (see `.env.example`).
+- Tier-2 **Cypher** is **not** configured here; use [`config/wisdom_cypher.yaml`](config/wisdom_cypher.yaml) and LaunchDarkly (see below).
 
 ## Architecture
 
@@ -62,7 +62,7 @@ flowchart LR
   subgraph inputs [Inputs]
     L[Looker CSV/API]
     W[Wisdom MCP]
-    C[settings.yaml + wisdom_cypher.yaml + optional LD JSON]
+    C[wisdom_cypher.yaml + optional LD per-query flags]
   end
   T1[Tier1 Looker]
   T2[Tier2 Wisdom]
@@ -83,10 +83,10 @@ flowchart LR
 |------------------|------|
 | `run.py` | Async orchestration entrypoint. |
 | `agents/tier1_looker.py` | Looker export load + `AccountRecord` normalization (`EXPORT_COLUMN_MAP`). |
-| `agents/tier2_enterpret.py` | Wisdom MCP session(s), prompt jobs, merge into accounts. |
+| `agents/tier2_enterpret.py` | Wisdom MCP session(s), Cypher-only Tier-2 jobs, merge into accounts. |
 | `agents/wisdom_mcp.py` | Streamable HTTP MCP client (`tools/call`, `initialize_wisdom` warmup). |
-| `agents/wisdom_prompts.py` | Resolves Tier-2 prompt jobs from `config/settings.yaml` plus optional LD JSON. |
-| `agents/ld_wisdom_config.py` | Optional LaunchDarkly client and JSON flag evaluation for Cypher/prompt overlays. |
+| `agents/wisdom_prompts.py` | Tier-2 job keys and `WISDOM_CYPHER_*` env suffix map. |
+| `agents/ld_wisdom_config.py` | Optional LaunchDarkly client; one JSON flag per `wisdom_cypher.yaml` map key. |
 | `agents/prioritizer.py` | `apply_prioritizer_response` helper for tests / future hooks. |
 | `core/schema.py` | `AccountRecord` datamodel. |
 | `core/deduplicator.py`, `core/merger.py`, `core/scorer.py` | Merge and deterministic ranking. |
@@ -96,25 +96,27 @@ flowchart LR
 
 - **Graph schema (CLI):** `python bootstrap/wisdom_get_schema.py` — prints MCP `get_schema` as JSON (`WISDOM_AUTH_TOKEN` required). Use `--list-tools` to see tool names; `--no-warmup` skips `initialize_wisdom`.
 - The client calls **`initialize_wisdom`** once per MCP session (Enterpret’s recommendation).
-- For **tabular** account rows, Tier 2 uses **`execute_cypher_query`** when Cypher is set. **Precedence:** env `WISDOM_CYPHER_<SUFFIX>` (one string replaces the whole job) → per-query map built from [`config/wisdom_cypher.yaml`](config/wisdom_cypher.yaml) merged with LaunchDarkly JSON flag **`figment-wisdom-cypher`** (LD wins per key when the optional SDK is installed and `LD_SDK_KEY` or `LAUNCHDARKLY_SDK_KEY` is set) → env `WISDOM_CYPHER`. Competitive displacement and switching intent each run **two** embedded queries (Gong, then Zendesk) per Tier-2 job; results merge by account. Set **`WISDOM_DISABLE_EMBEDDED_CYPHER=1`** to skip **repo YAML** defaults (LD Cypher can still apply). Set **`WISDOM_DISABLE_LD_CYPHER=1`** to skip the LD overlay only. Relying on **`search_knowledge_graph`** alone often returns metadata or prose, not account rows.
+- Tier 2 uses **`execute_cypher_query` only** (no `search_knowledge_graph`). **Precedence:** env `WISDOM_CYPHER_<SUFFIX>` (one string replaces the whole job) → per-query map from [`config/wisdom_cypher.yaml`](config/wisdom_cypher.yaml) merged with **one LaunchDarkly JSON flag per map key** (see **LaunchDarkly** section; LD wins per key when the SDK is installed and `LD_SDK_KEY` is set) → env `WISDOM_CYPHER`. Each logical job runs **two** Cypher strings (Gong + Zendesk keys). Set **`WISDOM_DISABLE_EMBEDDED_CYPHER=1`** to skip **repo YAML** (LD can still supply Cypher). Set **`WISDOM_DISABLE_LD_CYPHER=1`** to skip LD reads. If a job ends up with **no** Cypher strings, the pipeline **raises** (fail fast).
 - Responses are normalized in `records_from_wisdom_tool_result` in `agents/wisdom_mcp.py`.
 
-## LaunchDarkly: Wisdom flags
+## LaunchDarkly: Wisdom Cypher (per query)
 
-Use LaunchDarkly project **`figment-e-100-agent`**. Your server-side **`LD_SDK_KEY`** must be from an environment in that project (Test or Production). Set **`LD_PROJECT_KEY=figment-e-100-agent`** in `.env` so flag targeting rules can match the `projectKey` context attribute the runner sends.
+Use LaunchDarkly project **`figment-e-100-agent`**. Your server-side **`LD_SDK_KEY`** must be from an environment in that project. Set **`LD_PROJECT_KEY=figment-e-100-agent`** so targeting can use the `projectKey` context attribute.
 
-The Python runner **evaluates** flags by key; if a key is missing, evaluation falls back to `{}` and you get **YAML-only** behavior for that overlay.
+There are **four** flags (one per [`config/wisdom_cypher.yaml`](config/wisdom_cypher.yaml) block). Each variation should be JSON like `{"cypher": "MATCH ..."}` (aliases: `statement`, `query`). Override the flag key with **`LD_FLAG_CYPHER_<SUFFIX>`** where suffix is the map key uppercased (e.g. `LD_FLAG_CYPHER_COMPETITIVE_DISPLACEMENT_GONG`).
 
-**Two flags** (multivariate JSON-valued) in that project:
+| Map key | Default LaunchDarkly flag key |
+|---------|--------------------------------|
+| `competitive_displacement_gong` | `figment-wisdom-cypher-competitive-displacement-gong` |
+| `competitive_displacement_zendesk` | `figment-wisdom-cypher-competitive-displacement-zendesk` |
+| `switching_intent_gong` | `figment-wisdom-cypher-switching-intent-gong` |
+| `switching_intent_zendesk` | `figment-wisdom-cypher-switching-intent-zendesk` |
 
-| Flag key (default) | Purpose |
-|--------------------|---------|
-| `figment-wisdom-cypher` | Object whose string values are Cypher snippets; keys match [`config/wisdom_cypher.yaml`](config/wisdom_cypher.yaml) (`competitive_displacement_gong`, `competitive_displacement_zendesk`, `switching_intent_gong`, `switching_intent_zendesk`). |
-| `figment-wisdom-tier2-prompts` | Optional object with `tier2_prompt_fallback`, `tier2_prompt_default`, and/or `tier2_prompts` (map of job key → string). |
+If a flag is off or returns an empty object, that map key falls back to repo YAML (unless embedded YAML is disabled and nothing else supplies Cypher).
 
-**In the LaunchDarkly UI:** open project **figment-e-100-agent** — flags **`figment-wisdom-cypher`** and **`figment-wisdom-tier2-prompts`** (each has an empty default variation and a template variation). Edit the **Custom map** / **Template** variation, then set targeting or fallthrough so that variation is served when you want overlays. Or use your own flag keys via `LD_FLAG_WISDOM_CYPHER` / `LD_FLAG_WISDOM_PROMPTS`.
+**Tier-2 log verbosity (optional):** multivariate **string** flag **`figment-agent-tier2-log-verbosity`** (`off` \| `basic` \| `debug` \| `monitor`, or JSON `{"level":"debug"}`). Controls extra `[Tier2][log]` lines: **basic** adds resolved LD Cypher flag keys and row counts per `execute_cypher_query`; **debug** adds per-flag evaluation detail; **monitor** emits one JSON line (`figment_event=tier2_wisdom_summary`) for pipelines. Set **`WISDOM_TIER2_LOG_VERBOSITY`** to override LD locally. Flag key override: **`LD_FLAG_LOG_VERBOSITY`**. **`WISDOM_DISABLE_LD_LOG_VERBOSITY=1`** skips reading this flag from LD.
 
-**Provision with API/MCP:** use `projectKey` **`figment-e-100-agent`** (not `default`) with `create-feature-flag` or Terraform.
+**Provision with API/MCP:** `projectKey` **`figment-e-100-agent`** with `create-feature-flag` or Terraform.
 
 ## Repository layout
 
@@ -133,13 +135,13 @@ run.py           # CLI entrypoint
 
 | Symptom | Things to check |
 |--------|------------------|
-| **Tier 2 loads 0 accounts** | `WISDOM_AUTH_TOKEN` valid; **`ServiceError`** / empty `error` often indicates an Enterpret graph or search outage—contact support if it persists. Ensure Cypher runs: check **`config/wisdom_cypher.yaml`** (embedded) or env **`WISDOM_CYPHER_*`** / **`WISDOM_CYPHER`**. Confirm **`wisdom.tier2_prompt_fallback`** (or per-job **`tier2_prompts`**) is set in **`config/settings.yaml`**. |
+| **Tier 2 fails or loads 0 accounts** | `WISDOM_AUTH_TOKEN` valid. **“Tier 2 requires Cypher”** means no Cypher for a job — fix **`config/wisdom_cypher.yaml`**, the four **LD** flags, or **`WISDOM_CYPHER_*`** / **`WISDOM_CYPHER`**. Empty rows after successful Cypher: graph/query returned no account-shaped rows. |
 | **Looker load fails** | `LOOKER_EXPORT_PATH` exists; CSV headers still match `EXPORT_COLUMN_MAP` in `agents/tier1_looker.py`. |
 
 ## Security
 
 - Never commit `.env` or service account JSON (see `.gitignore`).
-- Wisdom data uses **your** Enterpret tenant; this codebase does not call OpenAI. **LaunchDarkly** is optional: install `figment-agent[launchdarkly]` and set `LD_SDK_KEY` (or `LAUNCHDARKLY_SDK_KEY`) if you want flag-backed Cypher/prompt text; optional `LD_PROJECT_KEY` / `LD_ENV_KEY` are passed as context attributes for targeting (see `agents/ld_wisdom_config.py` and `.env.example`).
+- Wisdom data uses **your** Enterpret tenant; this codebase does not call OpenAI. **LaunchDarkly** is optional: install `figment-agent[launchdarkly]` and set `LD_SDK_KEY` for per-query Cypher flags; optional `LD_PROJECT_KEY` / `LD_ENV_KEY` are context attributes for targeting (see `agents/ld_wisdom_config.py` and `.env.example`).
 
 ## License
 

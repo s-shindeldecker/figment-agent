@@ -13,8 +13,10 @@ columns:
   - header: "Urgency"
     field: urgency
     default: "active"
+  # Tier 1–2: LaunchDarkly / SFDC-style ARR. Tier 3 ZoomInfo: company revenue (000s→dollars in agent).
   - header: "ARR"
     field: arr
+    tier3_header: "Est. company revenue (ZoomInfo)"
   - header: "Plan"
     field: plan
   - header: "Geo"

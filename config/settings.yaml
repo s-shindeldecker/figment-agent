@@ -42,21 +42,3 @@ output:
     tier1_max: 50
     tier2_max: 25
     tier3_max: 25
-
-# Tier 2 Wisdom: prompt text for search_knowledge_graph fallback (when Cypher is unset).
-# Applied to both Tier-2 jobs unless overridden under tier2_prompts.<job_key>.
-wisdom:
-  tier2_prompt_fallback: |
-    You are the Tier 2 competitive intelligence agent using Enterpret Wisdom (Knowledge Graph).
-
-    Investigate customer accounts for:
-    - Mentions of Statsig, Optimizely, Eppo, or other experimentation competitors (e.g. Gong),
-      frequency, and whether they are evaluating, frustrated, or actively using a competitor
-      alongside LaunchDarkly.
-    - Strongest signals of dissatisfaction or switching intent for accounts on Statsig/Eppo.
-    Normalize urgency as: immediate (active switching intent), active (evaluating), watch (mentioned only).
-
-    When the tool response allows, return a JSON array of objects:
-    [{ "account_name", "competitor", "urgency", "context" or "deal_context", "quote" (optional),
-       "competitor_spend" (optional), "renewal_window_months" (optional),
-       "is_existing_ld_customer" (optional) }].

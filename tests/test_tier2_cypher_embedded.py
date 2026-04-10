@@ -45,7 +45,7 @@ def test_describe_embedded_sources_all_yaml_without_ld(monkeypatch):
     monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
     monkeypatch.delenv("WISDOM_DISABLE_LD_CYPHER", raising=False)
     monkeypatch.setattr(
-        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        "agents.ld_wisdom_config.get_wisdom_cypher_ld_overlay",
         lambda: {},
     )
     reload_wisdom_cypher_defaults_for_tests()
@@ -57,7 +57,7 @@ def test_describe_embedded_sources_all_yaml_without_ld(monkeypatch):
 def test_describe_embedded_sources_marks_ld_keys(monkeypatch):
     monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
     monkeypatch.setattr(
-        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        "agents.ld_wisdom_config.get_wisdom_cypher_ld_overlay",
         lambda: {"competitive_displacement_gong": "MATCH (x) RETURN 1 LIMIT 1"},
     )
     reload_wisdom_cypher_defaults_for_tests()
@@ -88,7 +88,7 @@ def test_ld_overlays_yaml_cypher_per_key(monkeypatch):
     monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
     monkeypatch.delenv("WISDOM_DISABLE_LD_CYPHER", raising=False)
     monkeypatch.setattr(
-        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        "agents.ld_wisdom_config.get_wisdom_cypher_ld_overlay",
         lambda: {
             "competitive_displacement_gong": "MATCH (ld:GongOverride) RETURN 'x' AS account_name LIMIT 1",
         },
@@ -106,7 +106,7 @@ def test_embedded_disabled_ld_cypher_fills_job(monkeypatch):
     monkeypatch.setenv("WISDOM_DISABLE_EMBEDDED_CYPHER", "1")
     monkeypatch.delenv("WISDOM_DISABLE_LD_CYPHER", raising=False)
     monkeypatch.setattr(
-        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        "agents.ld_wisdom_config.get_wisdom_cypher_ld_overlay",
         lambda: {
             "competitive_displacement_gong": "MATCH (a) RETURN 1 AS account_name LIMIT 1",
             "competitive_displacement_zendesk": "MATCH (b) RETURN 2 AS account_name LIMIT 1",
@@ -130,13 +130,23 @@ def test_wisdom_disable_ld_cypher_uses_yaml_only(monkeypatch):
     assert "MATCH (nli:NaturalLanguageInteraction)" in qs[0]
 
 
-def test_get_wisdom_cypher_map_from_ld_empty_when_disabled(monkeypatch):
-    from agents.ld_wisdom_config import get_wisdom_cypher_map_from_ld, reset_ld_wisdom_client_for_tests
+def test_get_wisdom_cypher_ld_overlay_empty_when_disabled(monkeypatch):
+    from agents.ld_wisdom_config import get_wisdom_cypher_ld_overlay, reset_ld_wisdom_client_for_tests
 
     monkeypatch.setenv("WISDOM_DISABLE_LD_CYPHER", "1")
     monkeypatch.setenv("LD_SDK_KEY", "fake-sdk-key-for-test")
     reset_ld_wisdom_client_for_tests()
-    assert get_wisdom_cypher_map_from_ld() == {}
+    assert get_wisdom_cypher_ld_overlay() == {}
+
+
+def test_cypher_from_ld_variation_accepts_json_and_string():
+    from agents.ld_wisdom_config import cypher_from_ld_variation
+
+    assert cypher_from_ld_variation({"cypher": "  MATCH (n) RETURN n "}) == "MATCH (n) RETURN n"
+    assert cypher_from_ld_variation({"statement": "S"}) == "S"
+    assert cypher_from_ld_variation("plain") == "plain"
+    assert cypher_from_ld_variation({}) is None
+    assert cypher_from_ld_variation(None) is None
 
 
 def test_env_overrides_embedded(monkeypatch):

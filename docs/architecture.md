@@ -18,7 +18,7 @@ Downstream code assumes this single type.
 - It **sequentially** runs Tier 1 → Tier 2 (if `WISDOM_AUTH_TOKEN` is set) → Tier 3 (ZoomInfo CSVs when present, then optional allowlisted web), **appends** all rows into a **`combined`** list, then:
   - Builds **per-tier Sheet rows** (cloned accounts with tier-local score/rank — see [Core processing](#core-processing-core)).
   - Runs **`merge_and_score(combined)`**, then **`resolve_e100_summary_list`** (default **50/25/25** by merged `tier` + score backfill to 100) for **console, Slack, and the optional E100 Summary sheet**; tier tabs remain full per-tier lists.
-- **Configuration** is split between **`.env`** (secrets, paths, feature flags) and **`config/settings.yaml`** (scoring weights, Wisdom prompt text, summary quotas, etc.). Sheet tab titles are fixed in **`outputs/sheets_writer.py`**.
+- **Configuration** is split between **`.env`** (secrets, paths, feature flags) and **`config/settings.yaml`** (scoring weights, summary quotas, etc.). Tier-2 Cypher lives in **`config/wisdom_cypher.yaml`** and optional LaunchDarkly (see README). Sheet tab titles are fixed in **`outputs/sheets_writer.py`**.
 
 ```mermaid
 flowchart TB
@@ -54,12 +54,12 @@ flowchart TB
 |--------|------|
 | [`tier1_looker.py`](../agents/tier1_looker.py) | Loads Tier 1 from Looker **CSV** (or API path); maps columns → `AccountRecord`. |
 | [`tier2_enterpret.py`](../agents/tier2_enterpret.py) + [`wisdom_mcp.py`](../agents/wisdom_mcp.py) | Tier 2 via **Enterpret Wisdom MCP** (HTTP MCP client, `initialize_wisdom`, tool calls). |
-| [`wisdom_prompts.py`](../agents/wisdom_prompts.py) | Resolves which Tier-2 jobs run and prompt/Cypher sources. |
+| [`wisdom_prompts.py`](../agents/wisdom_prompts.py) | Tier-2 job keys and env suffix map for `WISDOM_CYPHER_*`. |
 | [`tier3_zoominfo.py`](../agents/tier3_zoominfo.py) | Tier 3 from **ZoomInfo-style exports** under `data/` when files exist. |
 | [`tier3_web.py`](../agents/tier3_web.py) | Optional Tier 3 from **allowlisted URLs** ([`config/tier3_sources.yaml`](../config/tier3_sources.yaml)), env-gated. |
 | [`base.py`](../agents/base.py) | Shared agent scaffolding where used. |
 
-Tier 2 tabular data is biased toward **`execute_cypher_query`** with Cypher from env or [`config/wisdom_cypher.yaml`](../config/wisdom_cypher.yaml). [`bootstrap/wisdom_get_schema.py`](../bootstrap/wisdom_get_schema.py) is a CLI helper for graph schema.
+Tier 2 uses **`execute_cypher_query` only** (no prose / `search_knowledge_graph`). Cypher comes from env, [`config/wisdom_cypher.yaml`](../config/wisdom_cypher.yaml), and optional **per-map-key** LaunchDarkly JSON flags; missing Cypher for a job is a **hard error**. Optional LaunchDarkly **string** flag **`figment-agent-tier2-log-verbosity`** (and env `WISDOM_TIER2_LOG_VERBOSITY`) gates extra Tier-2 console detail for debugging and a JSON **monitor** summary line. [`bootstrap/wisdom_get_schema.py`](../bootstrap/wisdom_get_schema.py) is a CLI helper for graph schema.
 
 ## Core processing (`core/`)
 
@@ -75,7 +75,7 @@ Tier 2 tabular data is biased toward **`execute_cypher_query`** with Cypher from
 
 ## Configuration layout
 
-- **`config/settings.yaml`** — Scoring, thresholds, schedule hints, **`output.e100_summary`** quotas, Wisdom prompt fallback / per-job overrides. **Google Sheet tab titles** are constants in [`outputs/sheets_writer.py`](../outputs/sheets_writer.py) (`_WORKSHEET_TITLES`).
+- **`config/settings.yaml`** — Scoring, thresholds, schedule hints, **`output.e100_summary`** quotas. **Google Sheet tab titles** are constants in [`outputs/sheets_writer.py`](../outputs/sheets_writer.py) (`_WORKSHEET_TITLES`).
 - **`config/wisdom_cypher.yaml`** — Embedded Cypher for Tier 2 (when not overridden by env).
 - **`.env`** — Paths, `WISDOM_AUTH_TOKEN`, `GOOGLE_SHEET_ID`, Slack webhook, flags (`E100_WRITE_MERGED_MASTER`, `E100_SHEET_MARK_CHANGES`, etc.). See [`.env.example`](../.env.example).
 
@@ -96,9 +96,9 @@ Tier 2 tabular data is biased toward **`execute_cypher_query`** with Cypher from
 |------------------|------|
 | `run.py` | Async orchestration entrypoint. |
 | `agents/tier1_looker.py` | Looker export load + `AccountRecord` normalization. |
-| `agents/tier2_enterpret.py` | Wisdom MCP session(s), prompt jobs, merge into accounts. |
+| `agents/tier2_enterpret.py` | Wisdom MCP session(s), Cypher-only Tier-2 jobs, merge into accounts. |
 | `agents/wisdom_mcp.py` | Streamable HTTP MCP client. |
-| `agents/wisdom_prompts.py` | Resolves Tier-2 prompt jobs from `config/settings.yaml`. |
+| `agents/wisdom_prompts.py` | Tier-2 job keys and Cypher env suffix map. |
 | `agents/prioritizer.py` | `apply_prioritizer_response` helper for tests / future hooks. |
 | `core/schema.py` | `AccountRecord` datamodel. |
 | `core/deduplicator.py`, `core/merger.py`, `core/scorer.py` | Merge and deterministic ranking. |

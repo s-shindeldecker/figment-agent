@@ -32,8 +32,24 @@ def load_e100_output_manifest(path: Optional[Path] = None) -> List[Dict[str, Any
     return cols
 
 
-def manifest_headers(columns: List[Dict[str, Any]]) -> List[str]:
-    return [str(c["header"]) for c in columns]
+def manifest_headers(
+    columns: List[Dict[str, Any]],
+    *,
+    worksheet: Optional[str] = None,
+) -> List[str]:
+    """
+    Header row for Sheets export. ``worksheet="tier3"`` uses ``tier3_header`` on a column
+    when set (same field order and cells as default headers).
+    """
+    out: List[str] = []
+    for c in columns:
+        if worksheet == "tier3":
+            alt = c.get("tier3_header")
+            if isinstance(alt, str) and alt.strip():
+                out.append(alt.strip())
+                continue
+        out.append(str(c["header"]))
+    return out
 
 
 def resolve_manifest_cell(account: AccountRecord, spec: Dict[str, Any]) -> Any:

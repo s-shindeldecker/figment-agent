@@ -132,18 +132,25 @@ def diff_snapshots(
     curr_tabs: Mapping[str, Mapping[str, List[str]]],
     headers: List[str],
     tab_titles: Mapping[str, str],
+    *,
+    headers_by_logical_tab: Optional[Mapping[str, List[str]]] = None,
 ) -> List[SheetChange]:
     changes: List[SheetChange] = []
     all_logical = set(prev_tabs.keys()) | set(curr_tabs.keys())
     for logical in sorted(all_logical):
         title = tab_titles.get(logical, logical)
+        tab_headers = (
+            (headers_by_logical_tab or {}).get(logical) or headers
+        )
+        if len(tab_headers) != len(headers):
+            tab_headers = headers
         old_m = prev_tabs.get(logical) or {}
         new_m = curr_tabs.get(logical) or {}
         old_keys = set(old_m.keys())
         new_keys = set(new_m.keys())
         for k in sorted(new_keys - old_keys):
             row = new_m[k]
-            disp = _display_name_for_key(row, headers, k)
+            disp = _display_name_for_key(row, tab_headers, k)
             changes.append(
                 SheetChange(
                     logical_tab=logical,
@@ -158,7 +165,7 @@ def diff_snapshots(
             )
         for k in sorted(old_keys - new_keys):
             row = old_m[k]
-            disp = _display_name_for_key(row, headers, k)
+            disp = _display_name_for_key(row, tab_headers, k)
             changes.append(
                 SheetChange(
                     logical_tab=logical,
@@ -179,7 +186,7 @@ def diff_snapshots(
             n = (n + [""] * nh)[:nh]
             if o == n:
                 continue
-            disp = _display_name_for_key(n, headers, k)
+            disp = _display_name_for_key(n, tab_headers, k)
             for i in range(nh):
                 if o[i] != n[i]:
                     changes.append(
@@ -189,7 +196,7 @@ def diff_snapshots(
                             account_key=k,
                             account_display=disp,
                             kind="field_change",
-                            field=headers[i],
+                            field=tab_headers[i],
                             before=o[i],
                             after=n[i],
                         )

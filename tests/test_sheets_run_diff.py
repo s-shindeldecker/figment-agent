@@ -58,6 +58,24 @@ def test_diff_snapshots_pads_short_rows():
     assert any(c.field == "H2" for c in ch)
 
 
+def test_diff_snapshots_tier3_uses_per_tab_headers():
+    headers = ["Account Name", "ARR"]
+    headers_t3 = ["Account Name", "Est. company revenue (ZoomInfo)"]
+    titles = {"tier3": "E100 Tier 3"}
+    prev = {"tier3": {"a": ["A", "100"]}}
+    curr = {"tier3": {"a": ["A", "200"]}}
+    ch = diff_snapshots(
+        prev,
+        curr,
+        headers,
+        titles,
+        headers_by_logical_tab={"tier3": headers_t3},
+    )
+    fc = [c for c in ch if c.kind == "field_change"]
+    assert len(fc) == 1
+    assert fc[0].field == "Est. company revenue (ZoomInfo)"
+
+
 def test_delta_markers_for_tab():
     ncol = 2
     prev = {"a": ["1", "2"], "c": ["0", "1"]}

@@ -606,7 +606,7 @@ async def wisdom_query_for_prompt(
 ) -> List[dict]:
     """
     Run Wisdom MCP (opens one session): search_knowledge_graph or execute_cypher_query.
-    Prefer execute_wisdom_prompt_jobs + one shared WisdomMCPClient session for multiple prompts.
+    Prefer execute_wisdom_tier2_jobs + one shared WisdomMCPClient session for multiple jobs.
     """
     async with WisdomMCPClient(base_url, token) as client:
         tools = await client.list_tools()

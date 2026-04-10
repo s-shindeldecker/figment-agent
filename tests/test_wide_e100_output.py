@@ -94,6 +94,16 @@ def test_merge_accounts_t1_base_t2_overlay():
     assert "enterpret" in (m.source or "")
 
 
+def test_manifest_tier3_header_override_for_arr_column():
+    columns = load_e100_output_manifest()
+    default_h = manifest_headers(columns)
+    t3_h = manifest_headers(columns, worksheet="tier3")
+    assert len(default_h) == len(t3_h)
+    i = default_h.index("ARR")
+    assert "ZoomInfo" in t3_h[i]
+    assert t3_h[i] != "ARR"
+
+
 def test_manifest_wisdom_columns_resolve_from_wisdom_extras():
     columns = load_e100_output_manifest()
     headers = manifest_headers(columns)

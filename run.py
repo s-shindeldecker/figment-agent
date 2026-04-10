@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agents.tier1_looker import Tier1LookerAgent
-from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_prompt_jobs
+from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_tier2_jobs
 from agents.tier3_web import collect as collect_tier3_web
 from agents.tier3_zoominfo import Tier3ZoomInfoAgent, COMPETITOR_TECH_PATH, ANALYTIC_CMS_PATH
-from agents.wisdom_prompts import resolve_wisdom_prompt_jobs
+from agents.wisdom_prompts import tier2_job_keys
 from core.deduplicator import merge_accounts
 from core.merger import (
     clone_accounts_for_sheet_export,
@@ -50,14 +50,13 @@ async def run_e100_refresh():
 
     combined: list = list(tier1_accounts)
 
-    # ---- Tier 2: Wisdom (settings.yaml prompts + wisdom_cypher.yaml) -------
+    # ---- Tier 2: Wisdom (Cypher only — wisdom_cypher.yaml + per-key LD flags) ---
     tier2_accounts: list = []
     wisdom_token = (os.getenv("WISDOM_AUTH_TOKEN") or "").strip()
     if wisdom_token:
         try:
-            prompt_jobs, _src = resolve_wisdom_prompt_jobs()
-            tier2_accounts = await execute_wisdom_prompt_jobs(
-                prompt_jobs,
+            tier2_accounts = await execute_wisdom_tier2_jobs(
+                tier2_job_keys(),
                 log_prefix="[Tier2]",
             )
             print(f"[Tier2] {len(tier2_accounts)} accounts loaded")
