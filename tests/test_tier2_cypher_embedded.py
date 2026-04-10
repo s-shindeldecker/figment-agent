@@ -2,6 +2,7 @@ import pytest
 
 from agents.tier2_enterpret import _cyphers_for_job_key, _build_deal_context_from_row
 from agents.wisdom_cypher_defaults import (
+    describe_embedded_cypher_key_sources,
     get_embedded_cypher_queries_for_suffix,
     reload_wisdom_cypher_defaults_for_tests,
 )
@@ -40,6 +41,32 @@ def test_embedded_cypher_for_switching_flag(monkeypatch):
     assert "switching_intent" in qs[1]
 
 
+def test_describe_embedded_sources_all_yaml_without_ld(monkeypatch):
+    monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
+    monkeypatch.delenv("WISDOM_DISABLE_LD_CYPHER", raising=False)
+    monkeypatch.setattr(
+        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        lambda: {},
+    )
+    reload_wisdom_cypher_defaults_for_tests()
+    pairs = describe_embedded_cypher_key_sources("COMPETITIVE_DISPLACEMENT")
+    assert len(pairs) == 2
+    assert all(src == "yaml" for _, src in pairs)
+
+
+def test_describe_embedded_sources_marks_ld_keys(monkeypatch):
+    monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
+    monkeypatch.setattr(
+        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        lambda: {"competitive_displacement_gong": "MATCH (x) RETURN 1 LIMIT 1"},
+    )
+    reload_wisdom_cypher_defaults_for_tests()
+    pairs = describe_embedded_cypher_key_sources("COMPETITIVE_DISPLACEMENT")
+    by_key = dict(pairs)
+    assert by_key["competitive_displacement_gong"] == "launchdarkly"
+    assert by_key["competitive_displacement_zendesk"] == "yaml"
+
+
 def test_embedded_suffix_returns_gong_zendesk_pairs(monkeypatch):
     monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
     comp = get_embedded_cypher_queries_for_suffix("COMPETITIVE_DISPLACEMENT")
@@ -53,6 +80,63 @@ def test_embedded_cypher_disabled(monkeypatch):
     monkeypatch.delenv("WISDOM_CYPHER", raising=False)
     monkeypatch.setenv("WISDOM_DISABLE_EMBEDDED_CYPHER", "1")
     assert _cyphers_for_job_key("e100-wisdom-prompt-competitive-displacement") == []
+
+
+def test_ld_overlays_yaml_cypher_per_key(monkeypatch):
+    monkeypatch.delenv("WISDOM_CYPHER_COMPETITIVE_DISPLACEMENT", raising=False)
+    monkeypatch.delenv("WISDOM_CYPHER", raising=False)
+    monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
+    monkeypatch.delenv("WISDOM_DISABLE_LD_CYPHER", raising=False)
+    monkeypatch.setattr(
+        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        lambda: {
+            "competitive_displacement_gong": "MATCH (ld:GongOverride) RETURN 'x' AS account_name LIMIT 1",
+        },
+    )
+    reload_wisdom_cypher_defaults_for_tests()
+    qs = _cyphers_for_job_key("e100-wisdom-prompt-competitive-displacement")
+    assert len(qs) == 2
+    assert "GongOverride" in qs[0]
+    assert "CONTAINS 'Zendesk'" in qs[1]
+
+
+def test_embedded_disabled_ld_cypher_fills_job(monkeypatch):
+    monkeypatch.delenv("WISDOM_CYPHER_COMPETITIVE_DISPLACEMENT", raising=False)
+    monkeypatch.delenv("WISDOM_CYPHER", raising=False)
+    monkeypatch.setenv("WISDOM_DISABLE_EMBEDDED_CYPHER", "1")
+    monkeypatch.delenv("WISDOM_DISABLE_LD_CYPHER", raising=False)
+    monkeypatch.setattr(
+        "agents.ld_wisdom_config.get_wisdom_cypher_map_from_ld",
+        lambda: {
+            "competitive_displacement_gong": "MATCH (a) RETURN 1 AS account_name LIMIT 1",
+            "competitive_displacement_zendesk": "MATCH (b) RETURN 2 AS account_name LIMIT 1",
+        },
+    )
+    reload_wisdom_cypher_defaults_for_tests()
+    qs = _cyphers_for_job_key("e100-wisdom-prompt-competitive-displacement")
+    assert len(qs) == 2
+    assert "MATCH (a)" in qs[0]
+    assert "MATCH (b)" in qs[1]
+
+
+def test_wisdom_disable_ld_cypher_uses_yaml_only(monkeypatch):
+    monkeypatch.delenv("WISDOM_CYPHER_COMPETITIVE_DISPLACEMENT", raising=False)
+    monkeypatch.delenv("WISDOM_CYPHER", raising=False)
+    monkeypatch.delenv("WISDOM_DISABLE_EMBEDDED_CYPHER", raising=False)
+    monkeypatch.setenv("WISDOM_DISABLE_LD_CYPHER", "1")
+    reload_wisdom_cypher_defaults_for_tests()
+    qs = _cyphers_for_job_key("e100-wisdom-prompt-competitive-displacement")
+    assert len(qs) == 2
+    assert "MATCH (nli:NaturalLanguageInteraction)" in qs[0]
+
+
+def test_get_wisdom_cypher_map_from_ld_empty_when_disabled(monkeypatch):
+    from agents.ld_wisdom_config import get_wisdom_cypher_map_from_ld, reset_ld_wisdom_client_for_tests
+
+    monkeypatch.setenv("WISDOM_DISABLE_LD_CYPHER", "1")
+    monkeypatch.setenv("LD_SDK_KEY", "fake-sdk-key-for-test")
+    reset_ld_wisdom_client_for_tests()
+    assert get_wisdom_cypher_map_from_ld() == {}
 
 
 def test_env_overrides_embedded(monkeypatch):

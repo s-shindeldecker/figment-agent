@@ -22,7 +22,7 @@ def test_resolve_wisdom_prompt_jobs_two_jobs_from_settings(monkeypatch):
         },
     )
     jobs, src = resolve_wisdom_prompt_jobs()
-    assert src == "config/settings.yaml"
+    assert src == "config/settings.yaml+ld"
     assert len(jobs) == 2
     assert [j[0] for j in jobs] == list(WISDOM_TIER2_JOB_KEYS)
     assert all(j[1] == "shared instructions for all jobs" for j in jobs)
@@ -62,6 +62,54 @@ def test_wisdom_tier2_job_keys_alias_matches_flag_keys_tuple():
 
 def test_wisdom_cypher_env_suffixes_align_with_job_keys():
     assert set(WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY) == set(WISDOM_TIER2_JOB_KEYS)
+
+
+def test_resolve_wisdom_ld_prompt_fallback_overrides_yaml(monkeypatch):
+    import agents.wisdom_prompts as wp
+
+    monkeypatch.setattr(
+        wp,
+        "get_wisdom_prompts_overlay_from_ld",
+        lambda: {"tier2_prompt_fallback": "instructions from LaunchDarkly"},
+    )
+    monkeypatch.setattr(
+        wp,
+        "_read_settings_dict",
+        lambda: wp._merge_wisdom_ld_overlay(
+            {"wisdom": {"tier2_prompt_fallback": "yaml fallback"}}
+        ),
+    )
+    jobs, src = resolve_wisdom_prompt_jobs()
+    assert src == "config/settings.yaml+ld"
+    assert all(j[1] == "instructions from LaunchDarkly" for j in jobs)
+
+
+def test_resolve_wisdom_ld_tier2_prompts_merge_with_yaml(monkeypatch):
+    import agents.wisdom_prompts as wp
+
+    keys = list(WISDOM_TIER2_JOB_KEYS)
+    monkeypatch.setattr(
+        wp,
+        "get_wisdom_prompts_overlay_from_ld",
+        lambda: {
+            "tier2_prompts": {keys[1]: "switching from LD"},
+        },
+    )
+    monkeypatch.setattr(
+        wp,
+        "_read_settings_dict",
+        lambda: wp._merge_wisdom_ld_overlay(
+            {
+                "wisdom": {
+                    "tier2_prompt_fallback": "shared",
+                    "tier2_prompts": {keys[0]: "competitive yaml"},
+                }
+            }
+        ),
+    )
+    jobs, _ = resolve_wisdom_prompt_jobs()
+    assert jobs[0][1] == "competitive yaml"
+    assert jobs[1][1] == "switching from LD"
 
 
 def test_apply_prioritizer_response_sets_ranks():

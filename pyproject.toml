@@ -27,6 +27,9 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
+launchdarkly = [
+    "launchdarkly-server-sdk>=9.8,<9.15",
+]
 
 [tool.setuptools.packages.find]
 include = ["agents*", "core*", "outputs*", "bootstrap*"]

@@ -9,10 +9,11 @@ does not use the prompt text when ``execute_cypher_query`` runs; prompts still a
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import yaml
 
+from agents.ld_wisdom_config import get_wisdom_prompts_overlay_from_ld
 from agents.wisdom_mcp import WisdomMCPError
 
 # Stable Tier-2 job identifiers (order preserved). Same strings as legacy LD flag keys.
@@ -38,10 +39,62 @@ def _settings_path() -> Path:
 def _read_settings_dict() -> dict:
     path = _settings_path()
     if not path.is_file():
-        return {}
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data if isinstance(data, dict) else {}
+        data: dict = {}
+    else:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        data = data if isinstance(data, dict) else {}
+    return _merge_wisdom_ld_overlay(data)
+
+
+def describe_wisdom_prompts_ld_overlay() -> Optional[str]:
+    """
+    Human-readable summary of non-empty fields applied from the LaunchDarkly
+    ``figment-wisdom-tier2-prompts`` flag. Returns None if the flag contributed nothing.
+    """
+    ld = get_wisdom_prompts_overlay_from_ld()
+    if not ld:
+        return None
+    parts: List[str] = []
+    for key in ("tier2_prompt_fallback", "tier2_prompt_default"):
+        raw = ld.get(key)
+        if isinstance(raw, str) and raw.strip():
+            parts.append(key)
+    tp_ld = ld.get("tier2_prompts")
+    if isinstance(tp_ld, dict):
+        for jk, jv in sorted(tp_ld.items(), key=lambda x: str(x[0])):
+            if isinstance(jv, str) and jv.strip():
+                parts.append(f"tier2_prompts[{jk}]")
+    if not parts:
+        return None
+    return ", ".join(parts)
+
+
+def _merge_wisdom_ld_overlay(data: dict) -> dict:
+    """Overlay wisdom.* from LaunchDarkly JSON flag (LD strings win when non-empty)."""
+    ld = get_wisdom_prompts_overlay_from_ld()
+    if not ld:
+        return data
+    out = dict(data)
+    wisdom = out.get("wisdom")
+    if not isinstance(wisdom, dict):
+        wisdom = {}
+    else:
+        wisdom = dict(wisdom)
+    for key in ("tier2_prompt_fallback", "tier2_prompt_default"):
+        raw = ld.get(key)
+        if isinstance(raw, str) and raw.strip():
+            wisdom[key] = raw.strip()
+    tp_ld = ld.get("tier2_prompts")
+    if isinstance(tp_ld, dict):
+        cur = wisdom.get("tier2_prompts")
+        merged_tp = dict(cur) if isinstance(cur, dict) else {}
+        for jk, jv in tp_ld.items():
+            if isinstance(jv, str) and jv.strip():
+                merged_tp[str(jk)] = jv.strip()
+        wisdom["tier2_prompts"] = merged_tp
+    out["wisdom"] = wisdom
+    return out
 
 
 def _load_wisdom_jobs_from_settings() -> List[Tuple[str, str]]:
@@ -92,8 +145,16 @@ def resolve_wisdom_prompt_jobs() -> Tuple[List[Tuple[str, str]], str]:
     Loads exactly two jobs in ``WISDOM_TIER2_JOB_KEYS`` order from ``config/settings.yaml``.
     """
     jobs = _load_wisdom_jobs_from_settings()
-    print(
-        f"[Tier2] Loaded {len(jobs)} Wisdom prompt job(s) from config/settings.yaml "
-        "(wisdom.tier2_prompt_fallback / tier2_prompts)"
-    )
-    return jobs, "config/settings.yaml"
+    ld_prompt_bits = describe_wisdom_prompts_ld_overlay()
+    if ld_prompt_bits:
+        print(
+            f"[Tier2] Loaded {len(jobs)} Wisdom prompt job(s); "
+            f"LaunchDarkly overrides: {ld_prompt_bits}; "
+            "base from config/settings.yaml"
+        )
+    else:
+        print(
+            f"[Tier2] Loaded {len(jobs)} Wisdom prompt job(s) from "
+            "config/settings.yaml (no LaunchDarkly prompt overlay)"
+        )
+    return jobs, "config/settings.yaml+ld"

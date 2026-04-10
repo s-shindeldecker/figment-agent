@@ -4,7 +4,10 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 from agents.base import AgentService
-from agents.wisdom_cypher_defaults import get_embedded_cypher_queries_for_suffix
+from agents.wisdom_cypher_defaults import (
+    describe_embedded_cypher_key_sources,
+    get_embedded_cypher_queries_for_suffix,
+)
 from agents.wisdom_prompts import (
     WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY,
     resolve_wisdom_prompt_jobs,
@@ -199,6 +202,53 @@ def _tier2_parallel_enabled() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _log_tier2_cypher_sources(
+    prompt_jobs: List[Tuple[str, str]], *, log_prefix: str = "[Tier2]"
+) -> None:
+    """Log whether each job's Cypher comes from env, LaunchDarkly, or repo YAML."""
+    for job_key, _ in prompt_jobs:
+        mapped = WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY.get(job_key)
+        if mapped:
+            v = (os.getenv(f"WISDOM_CYPHER_{mapped}") or "").strip()
+            if v:
+                print(
+                    f"{log_prefix} {job_key}: Cypher from environment "
+                    f"WISDOM_CYPHER_{mapped} (single query; skips YAML/LD merge)"
+                )
+                continue
+        suffix = _sanitize_for_env_key(job_key)
+        if suffix:
+            v = (os.getenv(f"WISDOM_CYPHER_{suffix}") or "").strip()
+            if v:
+                print(
+                    f"{log_prefix} {job_key}: Cypher from environment "
+                    f"WISDOM_CYPHER_{suffix}"
+                )
+                continue
+        if mapped:
+            pairs = describe_embedded_cypher_key_sources(mapped)
+            if pairs:
+                detail = ", ".join(
+                    f"{k}={'LaunchDarkly' if src == 'launchdarkly' else 'repo YAML'}"
+                    for k, src in pairs
+                )
+                print(
+                    f"{log_prefix} {job_key}: Cypher from merged map ({detail})"
+                )
+                continue
+        glo = (os.getenv("WISDOM_CYPHER") or "").strip()
+        if glo:
+            print(
+                f"{log_prefix} {job_key}: Cypher from environment WISDOM_CYPHER "
+                "(global; single query)"
+            )
+            continue
+        print(
+            f"{log_prefix} {job_key}: no Cypher configured — "
+            "search_knowledge_graph only (prompt text above)"
+        )
+
+
 def _wisdom_mcp_calls_per_job(job_key: str) -> int:
     """One search call if no Cypher; else one execute_cypher_query per embedded string."""
     cy = _cyphers_for_job_key(job_key)
@@ -236,6 +286,7 @@ async def execute_wisdom_prompt_jobs(
 
     labels = ", ".join(pid for pid, _ in prompt_jobs)
     total_calls = sum(_wisdom_mcp_calls_per_job(jk) for jk, _ in prompt_jobs)
+    _log_tier2_cypher_sources(prompt_jobs, log_prefix=log_prefix)
     print(
         f"{log_prefix} {len(prompt_jobs)} Tier-2 job(s), {total_calls} Wisdom MCP "
         f"tool call(s) (embedded Cypher and/or search) — job keys: {labels}"
