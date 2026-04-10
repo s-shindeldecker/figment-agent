@@ -5,6 +5,7 @@ config/*.json
 data/looker_export.csv
 data/figment_t3_competitor_tech.csv
 data/figment_t3_analytic_cms.csv
+data/e100_last_sheet_snapshot.json
 __pycache__/
 *.py[cod]
 .venv/

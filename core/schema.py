@@ -57,3 +57,4 @@ class AccountRecord:
     # Unmapped / pass-through for wide export (Sheets manifest)
     looker_extras: Dict[str, str] = field(default_factory=dict)
     wisdom_extras: Dict[str, str] = field(default_factory=dict)
+    tier3_extras: Dict[str, str] = field(default_factory=dict)

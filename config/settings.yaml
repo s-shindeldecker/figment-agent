@@ -15,6 +15,12 @@ scoring:
     immediate: 3
     active: 2
     watch: 1
+  tier3_weights:
+    competitor_hit: 2.0
+    per_keyword: 0.75
+    keyword_cap: 3.0
+    dual_signal_bonus: 1.5
+    urgency_multiplier: 0.35
 
 thresholds:
   min_arr: 50000
@@ -28,7 +34,11 @@ schedule:
   cron: "0 6 * * 1"            # Every Monday at 6am
 
 output:
-  sheets_tab: "E100 Master"
+  sheets_tab: "E100 Master"           # optional merged tab (E100_WRITE_MERGED_MASTER=1)
+  sheets_tab_tier1: "E100 Tier 1"
+  sheets_tab_tier2: "E100 Tier 2"
+  sheets_tab_tier3: "E100 Tier 3"
+  sheets_tab_changelog: "E100 Changelog"   # run-to-run diff vs data/e100_last_sheet_snapshot.json
   top_n_slack_digest: 10
 
 # Tier 2 Wisdom: prompt text for search_knowledge_graph fallback (when Cypher is unset).

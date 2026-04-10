@@ -10,7 +10,12 @@ from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_prompt_jobs
 from agents.tier3_web import collect as collect_tier3_web
 from agents.tier3_zoominfo import Tier3ZoomInfoAgent, COMPETITOR_TECH_PATH, ANALYTIC_CMS_PATH
 from agents.wisdom_prompts import resolve_wisdom_prompt_jobs
-from core.merger import merge_and_score
+from core.deduplicator import merge_accounts
+from core.merger import (
+    clone_accounts_for_sheet_export,
+    merge_and_score,
+    score_and_rank_for_export,
+)
 
 
 def _print_results(accounts: list):
@@ -45,6 +50,7 @@ async def run_e100_refresh():
     combined: list = list(tier1_accounts)
 
     # ---- Tier 2: Wisdom (settings.yaml prompts + wisdom_cypher.yaml) -------
+    tier2_accounts: list = []
     wisdom_token = (os.getenv("WISDOM_AUTH_TOKEN") or "").strip()
     if wisdom_token:
         try:
@@ -62,6 +68,7 @@ async def run_e100_refresh():
         print("[Tier2] Skipping — WISDOM_AUTH_TOKEN not set")
 
     # ---- Tier 3a: ZoomInfo exports (competitor tech + analytics/CMS) -------
+    tier3_zi_accounts: list = []
     zi_files_present = os.path.exists(COMPETITOR_TECH_PATH) or os.path.exists(ANALYTIC_CMS_PATH)
     if zi_files_present:
         zi_agent = Tier3ZoomInfoAgent(None, "e100-tier3-zoominfo", None)
@@ -75,7 +82,19 @@ async def run_e100_refresh():
     tier3_web_accounts = await collect_tier3_web()
     combined.extend(tier3_web_accounts)
 
-    # ---- Merge by account + rank -----------------------------------------
+    # ---- Per-tier Sheets export (clones; does not mutate combined rows) ----
+    tier3_for_sheet = merge_accounts(tier3_zi_accounts + tier3_web_accounts)
+    tier1_sheet_rows = score_and_rank_for_export(
+        clone_accounts_for_sheet_export(tier1_accounts)
+    )
+    tier2_sheet_rows = score_and_rank_for_export(
+        clone_accounts_for_sheet_export(tier2_accounts)
+    )
+    tier3_sheet_rows = score_and_rank_for_export(
+        clone_accounts_for_sheet_export(tier3_for_sheet)
+    )
+
+    # ---- Merge by account + rank (console, Slack, optional merged tab) ----
     print("[Prioritizer] Deterministic merge_and_score (core/scorer.py)")
     final_list = merge_and_score(combined)
     print(f"[Merge] {len(combined)} raw → {len(final_list)} after merge")
@@ -85,9 +104,17 @@ async def run_e100_refresh():
 
     sheet_id = os.getenv("GOOGLE_SHEET_ID")
     if sheet_id and sheet_id != "...":
-        from outputs.sheets_writer import write_to_sheets
-        write_to_sheets(final_list, sheet_id)
-        print(f"[Sheets] Written to Google Sheet {sheet_id}")
+        from outputs.sheets_writer import write_merged_master_enabled, write_to_sheets_by_tier
+
+        write_to_sheets_by_tier(
+            tier1_sheet_rows,
+            tier2_sheet_rows,
+            tier3_sheet_rows,
+            merged_accounts=final_list,
+            sheet_id=sheet_id,
+        )
+        extra = " + merged master tab" if write_merged_master_enabled() else ""
+        print(f"[Sheets] Written per-tier tabs (E100 Tier 1–3){extra} → {sheet_id}")
     else:
         print("[Sheets] Skipping — GOOGLE_SHEET_ID not set")
 

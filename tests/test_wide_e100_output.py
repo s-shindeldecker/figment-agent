@@ -137,5 +137,18 @@ def test_manifest_row_matches_headers_and_open_opportunities_column():
 def test_manifest_rejects_unknown_spec():
     columns = [{"header": "X", "bogus": True}]
     acct = AccountRecord(account_name="A")
-    with pytest.raises(ValueError, match="field, looker_extra, or wisdom_extra"):
+    with pytest.raises(ValueError, match="field, looker_extra, wisdom_extra, or tier3_extra"):
         account_to_manifest_row(acct, columns)
+
+
+def test_manifest_tier3_extra_column():
+    columns = load_e100_output_manifest()
+    headers = manifest_headers(columns)
+    acct = AccountRecord(
+        account_name="T3Co",
+        tier=3,
+        tier3_extras={"source_url": "https://example.com/p", "matched_keywords": "split test"},
+    )
+    row = account_to_manifest_row(acct, columns)
+    assert row[headers.index("T3: source URL")] == "https://example.com/p"
+    assert "split" in str(row[headers.index("T3: matched keywords")])

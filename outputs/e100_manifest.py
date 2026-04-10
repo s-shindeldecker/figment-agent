@@ -54,7 +54,11 @@ def resolve_manifest_cell(account: AccountRecord, spec: Dict[str, Any]) -> Any:
         return account.looker_extras.get(str(spec["looker_extra"]), "")
     if "wisdom_extra" in spec:
         return account.wisdom_extras.get(str(spec["wisdom_extra"]), "")
-    raise ValueError(f"Column spec must include field, looker_extra, or wisdom_extra: {spec}")
+    if "tier3_extra" in spec:
+        return account.tier3_extras.get(str(spec["tier3_extra"]), "")
+    raise ValueError(
+        f"Column spec must include field, looker_extra, wisdom_extra, or tier3_extra: {spec}"
+    )
 
 
 def account_to_manifest_row(

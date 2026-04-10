@@ -2,9 +2,9 @@
 Merge accounts that share the same account name across tiers.
 
 Looker (Tier 1) rows are the preferred base for commercial context; Tier 2
-Enterpret fields overlay when the base value is empty. ``looker_extras`` and
-``wisdom_extras`` are merged with Looker keys winning on collision in
-``looker_extras`` and later Wisdom rows winning in ``wisdom_extras``.
+Enterpret fields overlay when the base value is empty. ``looker_extras``,
+``wisdom_extras``, and ``tier3_extras`` merge with Looker keys winning in
+``looker_extras`` and later rows winning in ``wisdom_extras`` / ``tier3_extras``.
 """
 
 from __future__ import annotations
@@ -94,9 +94,14 @@ def _merge_wisdom_extras(a: Dict[str, str], b: Dict[str, str]) -> Dict[str, str]
     return {**a, **b}
 
 
+def _merge_tier3_extras(a: Dict[str, str], b: Dict[str, str]) -> Dict[str, str]:
+    return {**a, **b}
+
+
 def _merge_pair(base: AccountRecord, overlay: AccountRecord) -> AccountRecord:
     looker_extras = _merge_looker_extras(overlay.looker_extras, base.looker_extras)
     wisdom_extras = _merge_wisdom_extras(base.wisdom_extras, overlay.wisdom_extras)
+    tier3_extras = _merge_tier3_extras(base.tier3_extras, overlay.tier3_extras)
 
     return replace(
         base,
@@ -140,6 +145,7 @@ def _merge_pair(base: AccountRecord, overlay: AccountRecord) -> AccountRecord:
         notes=_merge_str(base.notes, overlay.notes),
         looker_extras=looker_extras,
         wisdom_extras=wisdom_extras,
+        tier3_extras=tier3_extras,
     )
 
 

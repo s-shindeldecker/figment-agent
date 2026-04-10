@@ -1,15 +1,15 @@
 # figment-agent
 
-Python pipeline that builds the **E100 expansion account list**: Tier 1 usage data from Looker, Tier 2 competitive intelligence from [Enterpret Wisdom](https://helpcenter.enterpret.com/en/articles/12665166-wisdom-mcp-server) (MCP), optional Tier 3 hooks, merge/dedupe, and **deterministic** ranking via `merge_and_score` / `core/scorer.py`.
+Python pipeline that builds the **E100 expansion account list**: Tier 1 usage data from Looker, Tier 2 competitive intelligence from [Enterpret Wisdom](https://helpcenter.enterpret.com/en/articles/12665166-wisdom-mcp-server) (MCP), optional Tier 3 web signals, merge/dedupe, and **deterministic** ranking via `merge_and_score` / `core/scorer.py`.
 
 ## What it does
 
 1. **Tier 1 — Looker** — Loads accounts from a CSV export (`LOOKER_EXPORT_PATH`) or, when configured, from the Looker API.
 2. **Tier 2 — Enterpret Wisdom** — If `WISDOM_AUTH_TOKEN` is set, runs Wisdom MCP jobs using prompts from `config/settings.yaml` and embedded Cypher from `config/wisdom_cypher.yaml`.
-3. **Tier 3** — Currently a stub; intended for future agentic / external collectors.
+3. **Tier 3** — Optional allowlisted web fetch (`TIER3_WEB_ENABLED=1`, [`config/tier3_sources.yaml`](config/tier3_sources.yaml)): keyword/competitor hits in page text → `AccountRecord` (`tier=3`). Crawl depth / JS rendering are future work.
 4. **Merge** — Deduplicates by account name and merges tier signals.
 5. **Rank** — `merge_and_score()` using weights in `config/settings.yaml`.
-6. **Output** — Optional Google Sheets write and Slack digest.
+6. **Output** — Optional Google Sheets: **three worksheets** (Tier 1 / 2 / 3) with tier-local scores and ranks; optional fourth **merged** tab via `E100_WRITE_MERGED_MASTER=1`. Slack digest uses the merged ranked list.
 
 ## Requirements
 
@@ -43,7 +43,7 @@ Copy `.env.example` to `.env`. Important groups:
 |------|-----------|
 | **Looker** | `LOOKER_EXPORT_PATH` — path to exported CSV (file mode). For API mode, see `agents/tier1_looker.py` and unset `LOOKER_EXPORT_PATH`. |
 | **Wisdom MCP** | `WISDOM_AUTH_TOKEN` — [Bearer token from Enterpret](https://helpcenter.enterpret.com/en/articles/12665166-wisdom-mcp-server). Optional: `WISDOM_SERVER_URL`, `WISDOM_TIER2_PARALLEL`, `WISDOM_CYPHER_*`, `WISDOM_TIER2_TOOL`. |
-| **Outputs** | `GOOGLE_SHEET_ID`, `SLACK_WEBHOOK_URL` — optional. |
+| **Outputs** | `GOOGLE_SHEET_ID` (three tier tabs + optional `E100_WRITE_MERGED_MASTER`), `SLACK_WEBHOOK_URL` — optional. |
 
 Tier 2 uses two stable **job keys** in `agents/wisdom_prompts.py` (`WISDOM_TIER2_JOB_KEYS`) for logging and Cypher env overrides (`WISDOM_CYPHER_<SUFFIX>` via `WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY`). Each job runs Gong + Zendesk embedded Cypher from `wisdom_cypher.yaml`.
 

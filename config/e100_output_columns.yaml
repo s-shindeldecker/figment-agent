@@ -64,3 +64,10 @@ columns:
     wisdom_extra: signal_count
   - header: "Wisdom: source_query"
     wisdom_extra: source_query
+  # Tier 3 web scan (empty when tier != 3 or no hit)
+  - header: "T3: source URL"
+    tier3_extra: source_url
+  - header: "T3: matched keywords"
+    tier3_extra: matched_keywords
+  - header: "T3: matched competitors"
+    tier3_extra: matched_competitors

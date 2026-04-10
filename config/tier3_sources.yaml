@@ -1,0 +1,36 @@
+# Tier 3 — allowlisted web pages scanned for experimentation / competitor signals.
+# Enable with TIER3_WEB_ENABLED=1 in .env (off by default; no network in CI).
+#
+# Compliance: only list URLs you are permitted to fetch; review robots.txt and site terms.
+
+fetch:
+  timeout_seconds: 30
+  max_response_bytes: 2097152 # 2 MiB
+  user_agent: "FigmentE100-Tier3/1.0 (+internal pipeline)"
+  delay_between_requests_seconds: 1.0
+  # When true, skips URLs disallowed for User-agent * (best-effort; not a legal substitute).
+  respect_robots_txt: false
+
+# Case-insensitive substring match on visible page text after HTML stripping.
+keywords:
+  - feature flag
+  - feature flags
+  - A/B test
+  - A/B testing
+  - split test
+  - experimentation platform
+  - multivariate
+
+competitors:
+  - Optimizely
+  - Statsig
+  - Eppo
+  - VWO
+  - AB Tasty
+  - Kameleoon
+
+# Each entry is one URL to fetch (v1: no link following).
+sources:
+  # - url: "https://example.com/careers/engineering"
+  #   company_name: "Example Corp" # optional; else <title> or hostname
+  #   source_label: "tier3_web_example" # optional; sets AccountRecord.source
