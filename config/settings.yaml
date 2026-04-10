@@ -34,12 +34,14 @@ schedule:
   cron: "0 6 * * 1"            # Every Monday at 6am
 
 output:
-  sheets_tab: "E100 Master"           # optional merged tab (E100_WRITE_MERGED_MASTER=1)
-  sheets_tab_tier1: "E100 Tier 1"
-  sheets_tab_tier2: "E100 Tier 2"
-  sheets_tab_tier3: "E100 Tier 3"
-  sheets_tab_changelog: "E100 Changelog"   # run-to-run diff vs data/e100_last_sheet_snapshot.json
+  # Google Sheet tab names are hardcoded in outputs/sheets_writer.py (_WORKSHEET_TITLES).
   top_n_slack_digest: 10
+  # Merged list size: tier slots first, then highest-scoring remaining accounts (see core/merger.py).
+  e100_summary:
+    use_tier_quotas: true
+    tier1_max: 50
+    tier2_max: 25
+    tier3_max: 25
 
 # Tier 2 Wisdom: prompt text for search_knowledge_graph fallback (when Cypher is unset).
 # Applied to both Tier-2 jobs unless overridden under tier2_prompts.<job_key>.

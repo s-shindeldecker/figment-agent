@@ -8,8 +8,8 @@ Python pipeline that builds the **E100 expansion account list**: Tier 1 usage da
 2. **Tier 2 — Enterpret Wisdom** — If `WISDOM_AUTH_TOKEN` is set, runs Wisdom MCP jobs using prompts from `config/settings.yaml` and embedded Cypher from `config/wisdom_cypher.yaml`.
 3. **Tier 3** — Optional allowlisted web fetch (`TIER3_WEB_ENABLED=1`, [`config/tier3_sources.yaml`](config/tier3_sources.yaml)): keyword/competitor hits in page text → `AccountRecord` (`tier=3`). Crawl depth / JS rendering are future work.
 4. **Merge** — Deduplicates by account name and merges tier signals.
-5. **Rank** — `merge_and_score()` using weights in `config/settings.yaml`.
-6. **Output** — Optional Google Sheets: **three worksheets** (Tier 1 / 2 / 3) with tier-local scores and ranks; optional fourth **merged** tab via `E100_WRITE_MERGED_MASTER=1`. Slack digest uses the merged ranked list.
+5. **Rank** — `merge_and_score()` using weights in `config/settings.yaml`, then a **summary list** (default up to **100** accounts: **50 / 25 / 25** by merged `tier`, with score-based backfill if a tier is short). Tier tabs stay **full** lists; console, Slack, and the optional **E100 Summary** sheet use the summary. Override with `E100_SUMMARY_USE_FULL_MERGE=1` or `output.e100_summary` in `config/settings.yaml`.
+6. **Output** — Optional Google Sheets: **E100 Summary** first (when `E100_WRITE_MERGED_MASTER=1`), then **Tier 1 / 2 / 3** (full per-tier ranks), then **Changelog**. Slack digest uses the summary list.
 
 ## Requirements
 
@@ -43,17 +43,19 @@ Copy `.env.example` to `.env`. Important groups:
 |------|-----------|
 | **Looker** | `LOOKER_EXPORT_PATH` — path to exported CSV (file mode). For API mode, see `agents/tier1_looker.py` and unset `LOOKER_EXPORT_PATH`. |
 | **Wisdom MCP** | `WISDOM_AUTH_TOKEN` — [Bearer token from Enterpret](https://helpcenter.enterpret.com/en/articles/12665166-wisdom-mcp-server). Optional: `WISDOM_SERVER_URL`, `WISDOM_TIER2_PARALLEL`, `WISDOM_CYPHER_*`, `WISDOM_TIER2_TOOL`. |
-| **Outputs** | `GOOGLE_SHEET_ID` (three tier tabs + optional `E100_WRITE_MERGED_MASTER`), `SLACK_WEBHOOK_URL` — optional. |
+| **Outputs** | `GOOGLE_SHEET_ID` (tab names hardcoded in `outputs/sheets_writer.py`; `E100_WRITE_MERGED_MASTER` for summary), `SLACK_WEBHOOK_URL` — optional. Summary quotas: `E100_SUMMARY_USE_FULL_MERGE`, `E100_SUMMARY_TIER*_MAX`. |
 
 Tier 2 uses two stable **job keys** in `agents/wisdom_prompts.py` (`WISDOM_TIER2_JOB_KEYS`) for logging and Cypher env overrides (`WISDOM_CYPHER_<SUFFIX>` via `WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY`). Each job runs Gong + Zendesk embedded Cypher from `wisdom_cypher.yaml`.
 
 ### Application config (`config/settings.yaml`)
 
 - **`scoring`** — Weights for deterministic `merge_and_score` (`core/scorer.py`).
-- **`thresholds`**, **`schedule`**, **`output`** — Reference / future automation.
+- **`thresholds`**, **`schedule`**, **`output`** — Includes `e100_summary` quotas; Sheet tab titles live in code (`outputs/sheets_writer.py`).
 - **`wisdom.tier2_prompt_fallback`** (or **`tier2_prompt_default`**) — Shared prompt text for both Tier-2 jobs (search fallback when Cypher is unset). Optional **`wisdom.tier2_prompts.<job_key>`** overrides per job.
 
 ## Architecture
+
+For a longer reference (data flow, outputs, design choices), see **[`docs/architecture.md`](docs/architecture.md)**.
 
 ```mermaid
 flowchart LR
@@ -64,7 +66,7 @@ flowchart LR
   end
   T1[Tier1 Looker]
   T2[Tier2 Wisdom]
-  T3[Tier3 stub]
+  T3[Tier3 ZoomInfo web]
   D[Deduplicate]
   S[merge_and_score]
   O[Sheets / Slack]
@@ -103,6 +105,7 @@ agents/          # Tier agents, Wisdom MCP client
 bootstrap/       # wisdom_get_schema helper
 config/          # settings.yaml, wisdom_cypher.yaml (embedded Tier-2 Cypher)
 core/            # schema, dedupe, merge, scoring
+docs/            # architecture.md and other internal notes
 outputs/         # Sheets, Slack
 tests/           # pytest
 run.py           # CLI entrypoint

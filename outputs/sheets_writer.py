@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import gspread
-import yaml
 from gspread.exceptions import WorksheetNotFound
 from google.oauth2.service_account import Credentials
 
@@ -28,7 +27,15 @@ from outputs.sheets_run_diff import (
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_CRED = _REPO_ROOT / "config" / "google_service_account.json"
-_SETTINGS_PATH = _REPO_ROOT / "config" / "settings.yaml"
+
+# Google Sheet tab titles (gspread matches by exact string). Edit here only — not env / settings.yaml.
+_WORKSHEET_TITLES: Dict[str, str] = {
+    "tier1": "E100 Tier 1",
+    "tier2": "E100 Tier 2",
+    "tier3": "E100 Tier 3",
+    "merged": "E100 Summary",
+    "changelog": "E100 Changelog",
+}
 
 
 def _google_service_account_path() -> Path:
@@ -47,35 +54,14 @@ def _google_service_account_path() -> Path:
     return _DEFAULT_CRED
 
 
-def _load_output_settings() -> Dict[str, Any]:
-    try:
-        with open(_SETTINGS_PATH, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        return data.get("output") or {}
-    except Exception:
-        return {}
-
-
 def worksheet_titles() -> Dict[str, str]:
-    """Tab titles: env overrides, then settings.yaml, then defaults."""
-    out = _load_output_settings()
-    return {
-        "tier1": (os.getenv("GOOGLE_SHEET_TAB_TIER1") or "").strip()
-        or out.get("sheets_tab_tier1")
-        or "E100 Tier 1",
-        "tier2": (os.getenv("GOOGLE_SHEET_TAB_TIER2") or "").strip()
-        or out.get("sheets_tab_tier2")
-        or "E100 Tier 2",
-        "tier3": (os.getenv("GOOGLE_SHEET_TAB_TIER3") or "").strip()
-        or out.get("sheets_tab_tier3")
-        or "E100 Tier 3",
-        "merged": (os.getenv("GOOGLE_SHEET_TAB") or "").strip()
-        or out.get("sheets_tab")
-        or "E100 Master",
-        "changelog": (os.getenv("GOOGLE_SHEET_TAB_CHANGELOG") or "").strip()
-        or out.get("sheets_tab_changelog")
-        or "E100 Changelog",
-    }
+    """
+    Worksheet titles for gspread lookups. Keys: ``tier1`` … ``tier3``, ``merged`` (summary),
+    ``changelog``. Must match tab names in the spreadsheet exactly or a new tab will be created.
+
+    Names are hardcoded in ``_WORKSHEET_TITLES`` in this module (not environment variables).
+    """
+    return dict(_WORKSHEET_TITLES)
 
 
 def _env_truthy(name: str) -> bool:
@@ -170,7 +156,7 @@ def write_to_sheets_by_tier(
 ) -> None:
     """
     Write three worksheets (Tier 1 / 2 / 3). If ``E100_WRITE_MERGED_MASTER`` is set,
-    also write ``merged_accounts`` to the merged tab title (GOOGLE_SHEET_TAB / settings).
+    also write ``merged_accounts`` to the summary tab (see ``_WORKSHEET_TITLES``).
     Writes ``E100 Changelog`` (tab name configurable) and persists
     ``data/e100_last_sheet_snapshot.json`` for the next run's diff.
     """
@@ -210,6 +196,9 @@ def write_to_sheets_by_tier(
     mark = sheet_mark_changes_enabled()
     extra_col = 1 if mark else 0
 
+    ws_t1 = ws_t2 = ws_t3 = None
+    ws_merged = None
+
     for label, rows in (
         ("tier1", tier1_accounts),
         ("tier2", tier2_accounts),
@@ -222,6 +211,12 @@ def write_to_sheets_by_tier(
             min_rows=len(rows) + 10,
             min_cols=ncol + 2 + extra_col,
         )
+        if label == "tier1":
+            ws_t1 = sheet
+        elif label == "tier2":
+            ws_t2 = sheet
+        elif label == "tier3":
+            ws_t3 = sheet
         delta = None
         if mark:
             delta = delta_markers_for_tab(
@@ -239,6 +234,7 @@ def write_to_sheets_by_tier(
             min_rows=len(merged_accounts) + 10,
             min_cols=ncol + 2 + extra_col,
         )
+        ws_merged = sheet
         delta = None
         if mark:
             delta = delta_markers_for_tab(
@@ -267,6 +263,17 @@ def write_to_sheets_by_tier(
         values=_pad_rectangular(changelog_values),
         value_input_option="USER_ENTERED",
     )
+
+    # Summary (merged) first, then tier tabs, then changelog — matches spreadsheet tab order.
+    order: List[Any] = []
+    if ws_merged is not None:
+        order.append(ws_merged)
+    for ws in (ws_t1, ws_t2, ws_t3):
+        if ws is not None:
+            order.append(ws)
+    order.append(changelog_sheet)
+    if len(order) > 1:
+        spreadsheet.reorder_worksheets(order)
 
     save_snapshot(build_snapshot_payload(sheet_id, curr_tabs))
 

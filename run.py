@@ -14,6 +14,7 @@ from core.deduplicator import merge_accounts
 from core.merger import (
     clone_accounts_for_sheet_export,
     merge_and_score,
+    resolve_e100_summary_list,
     score_and_rank_for_export,
 )
 
@@ -99,8 +100,15 @@ async def run_e100_refresh():
     final_list = merge_and_score(combined)
     print(f"[Merge] {len(combined)} raw → {len(final_list)} after merge")
 
+    summary_list = resolve_e100_summary_list(final_list)
+    if len(summary_list) != len(final_list):
+        print(
+            f"[Summary] Quota list {len(summary_list)} accounts "
+            f"(tiers + backfill; full merge has {len(final_list)})"
+        )
+
     # ---- Outputs ---------------------------------------------------------
-    _print_results(final_list)
+    _print_results(summary_list)
 
     sheet_id = os.getenv("GOOGLE_SHEET_ID")
     if sheet_id and sheet_id != "...":
@@ -110,7 +118,7 @@ async def run_e100_refresh():
             tier1_sheet_rows,
             tier2_sheet_rows,
             tier3_sheet_rows,
-            merged_accounts=final_list,
+            merged_accounts=summary_list,
             sheet_id=sheet_id,
         )
         extra = " + merged master tab" if write_merged_master_enabled() else ""
@@ -121,12 +129,15 @@ async def run_e100_refresh():
     slack_url = os.getenv("SLACK_WEBHOOK_URL")
     if slack_url:
         from outputs.slack_notifier import send_digest
-        send_digest(final_list, slack_url)
+        send_digest(summary_list, slack_url)
         print("[Slack] Digest sent")
     else:
         print("[Slack] Skipping — SLACK_WEBHOOK_URL not set")
 
-    print(f"\nE100 refresh complete — {len(final_list)} accounts ranked.")
+    print(
+        f"\nE100 refresh complete — {len(summary_list)} accounts in summary output "
+        f"({len(final_list)} after merge)."
+    )
 
 
 if __name__ == "__main__":
