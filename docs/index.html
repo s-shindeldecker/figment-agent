@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --figment: #7C3AED; --figment-light: #EDE9FE; --figment-mid: #C4B5FD;
+    --ink: #1C1917; --muted: #78716C; --rule: #E7E5E4; --bg: #FAFAF9; --white: #FFFFFF;
+    --green: #065F46; --green-bg: #ECFDF5; --amber: #92400E; --amber-bg: #FFFBEB;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--ink); padding: 2rem 1.5rem 3rem; max-width: 780px; margin: 0 auto; line-height: 1.6; }
+  .header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 2rem; gap: 1rem; }
+  .logo { display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+  .logo-mark { width: 32px; height: 32px; background: var(--figment); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .logo-mark svg { width: 18px; height: 18px; }
+  .logo-name { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--ink); letter-spacing: -0.02em; }
+  .tagline { font-size: 0.78rem; color: var(--muted); font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; }
+  .header-right { text-align: right; flex-shrink: 0; }
+  .badge { display: inline-block; background: var(--figment); color: white; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.25rem 0.7rem; border-radius: 100px; margin-bottom: 0.3rem; }
+  .date { font-size: 0.75rem; color: var(--muted); }
+  .intro { background: var(--figment-light); border-left: 4px solid var(--figment); padding: 1rem 1.25rem; border-radius: 0 8px 8px 0; margin-bottom: 2rem; }
+  .intro p { font-size: 0.95rem; color: var(--ink); line-height: 1.65; }
+  .intro strong { color: var(--figment); font-weight: 500; }
+  .section-label { font-size: 0.68rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--figment); margin-bottom: 0.75rem; }
+  .compare { margin-bottom: 2rem; }
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+  .compare-col { background: var(--white); padding: 1.25rem; }
+  .compare-col.new { background: var(--figment-light); }
+  .compare-col-head { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--rule); }
+  .compare-col.old .compare-col-head { color: var(--muted); }
+  .compare-col.new .compare-col-head { color: var(--figment); }
+  .compare-item { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; font-size: 0.85rem; line-height: 1.5; align-items: flex-start; }
+  .compare-item .dot { width: 5px; height: 5px; border-radius: 50%; margin-top: 0.45rem; flex-shrink: 0; }
+  .old .dot { background: var(--muted); }
+  .new .dot { background: var(--figment); }
+  .old .compare-item { color: var(--muted); }
+  .new .compare-item { color: var(--ink); }
+  .tiers { margin-bottom: 2rem; }
+  .tier-row { display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: start; padding: 1rem 0; border-bottom: 1px solid var(--rule); }
+  .tier-row:last-child { border-bottom: none; }
+  .tier-num { font-family: 'DM Serif Display', serif; font-size: 2rem; color: var(--figment-mid); line-height: 1; width: 2.5rem; text-align: center; flex-shrink: 0; }
+  .tier-name { font-weight: 500; font-size: 0.95rem; margin-bottom: 0.2rem; }
+  .tier-desc { font-size: 0.82rem; color: var(--muted); line-height: 1.5; margin-bottom: 0.5rem; }
+  .tier-sources { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .source-chip { font-size: 0.7rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 100px; border: 1px solid; white-space: nowrap; }
+  .chip-purple { background: var(--figment-light); color: var(--figment); border-color: var(--figment-mid); }
+  .chip-green { background: var(--green-bg); color: var(--green); border-color: #6EE7B7; }
+  .chip-amber { background: var(--amber-bg); color: var(--amber); border-color: #FCD34D; }
+  .tier-count { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--ink); text-align: right; white-space: nowrap; line-height: 1; }
+  .tier-count span { display: block; font-family: 'DM Sans', sans-serif; font-size: 0.65rem; color: var(--muted); font-weight: 400; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.15rem; }
+  .signals { margin-bottom: 2rem; }
+  .signal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+  .signal-card { background: var(--white); border: 1px solid var(--rule); border-radius: 8px; padding: 0.9rem; }
+  .signal-icon { font-size: 1.1rem; margin-bottom: 0.4rem; }
+  .signal-name { font-size: 0.78rem; font-weight: 500; margin-bottom: 0.2rem; }
+  .signal-detail { font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
+  .signal-strength { display: flex; gap: 2px; margin-top: 0.4rem; }
+  .signal-strength .pip { height: 3px; border-radius: 2px; flex: 1; background: var(--rule); }
+  .signal-strength .pip.on { background: var(--figment); }
+  .arch { margin-bottom: 2rem; }
+  .arch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .arch-card { background: var(--white); border: 1px solid var(--rule); border-radius: 8px; padding: 0.9rem; }
+  .arch-label { font-size: 0.68rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
+  .arch-value { font-size: 0.82rem; color: var(--ink); line-height: 1.5; }
+  .footer { display: flex; align-items: center; justify-content: space-between; padding-top: 1.25rem; border-top: 1px solid var(--rule); font-size: 0.72rem; color: var(--muted); gap: 1rem; flex-wrap: wrap; }
+  .footer-note { font-style: italic; }
+  .footer-tech { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+  .tech-pill { background: var(--bg); border: 1px solid var(--rule); border-radius: 100px; padding: 0.15rem 0.6rem; font-size: 0.68rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3C7 3 4 7 4 12C4 14.5 5 16.5 6.5 18L5 21L8.5 19.5C9.5 20 10.7 20.5 12 20.5C17 20.5 20 16.5 20 12C20 7 17 3 12 3Z" fill="white" fill-opacity="0.9"/><circle cx="8.5" cy="12" r="1.2" fill="#7C3AED"/><circle cx="12" cy="12" r="1.2" fill="#7C3AED"/><circle cx="15.5" cy="12" r="1.2" fill="#7C3AED"/></svg>
+      </div>
+      <span class="logo-name">Figment</span>
+    </div>
+    <div class="tagline">E100 Experimentation Targeting — How It Works</div>
+  </div>
+  <div class="header-right">
+    <div class="badge">Internal</div>
+    <div class="date">April 2026</div>
+  </div>
+</div>
+
+<div class="intro">
+  <p>Figment is the automated agent that rebuilds and maintains the <strong>E100 experimentation target list</strong> — the 100 highest-priority accounts for the Experimentation Solutions team. It replaces a manual, stale spreadsheet with a live, multi-source scoring system that refreshes weekly without a human owner.</p>
+</div>
+
+<div class="compare">
+  <div class="section-label">What changed</div>
+  <div class="compare-grid">
+    <div class="compare-col old">
+      <div class="compare-col-head">Before — manual E100</div>
+      <div class="compare-item"><div class="dot"></div><div>Single Snowflake export, refreshed manually by one owner</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Last data update: 105+ weeks ago when maintained</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Prospects added by gut feel and rep memory</div></div>
+      <div class="compare-item"><div class="dot"></div><div>No competitive intelligence signals</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Lost momentum entirely when the owner left</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Single undifferentiated list, no tier logic</div></div>
+    </div>
+    <div class="compare-col new">
+      <div class="compare-col-head">Now — Figment</div>
+      <div class="compare-item"><div class="dot"></div><div>Three data sources, automated weekly refresh</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Looker live query — always current month's usage data</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Enterpret Cypher queries surface competitor signals from 12K+ Gong calls</div></div>
+      <div class="compare-item"><div class="dot"></div><div>ZoomInfo technographic + scoop intent for cold prospects</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Survives team changes — no single human owner required</div></div>
+      <div class="compare-item"><div class="dot"></div><div>Three scored tiers with distinct motions and criteria</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="tiers">
+  <div class="section-label">Three tiers, one ranked list</div>
+  <div class="tier-row">
+    <div class="tier-num">1</div>
+    <div>
+      <div class="tier-name">Customer expansion</div>
+      <div class="tier-desc">Enterprise customers who have access to Experimentation but haven't used it in 90+ days, or are using it well below their purchased entitlement ceiling. Motion: activate or grow cMAU.</div>
+      <div class="tier-sources">
+        <span class="source-chip chip-purple">Looker — Exp Usage explore</span>
+        <span class="source-chip chip-purple">Salesforce — open opps</span>
+        <span class="source-chip chip-green">Enterpret — Gong themes</span>
+      </div>
+    </div>
+    <div class="tier-count">~50<span>accounts</span></div>
+  </div>
+  <div class="tier-row">
+    <div class="tier-num">2</div>
+    <div>
+      <div class="tier-name">Competitive displacement</div>
+      <div class="tier-desc">Customers or prospects confirmed running Statsig, Eppo, Optimizely, or other competitors — surfaced from 12,000+ Gong calls via Enterpret Wisdom MCP Cypher queries. Cypher stored in wisdom_cypher.yaml. Motion: displace or consolidate.</div>
+      <div class="tier-sources">
+        <span class="source-chip chip-green">Enterpret — execute_cypher_query</span>
+        <span class="source-chip chip-green">Gong + Zendesk signals</span>
+        <span class="source-chip chip-purple">Salesforce — opp stage</span>
+      </div>
+    </div>
+    <div class="tier-count">~25<span>accounts</span></div>
+  </div>
+  <div class="tier-row">
+    <div class="tier-num">3</div>
+    <div>
+      <div class="tier-name">Net-new prospects</div>
+      <div class="tier-desc">Companies with no LD relationship, identified by two ZoomInfo saved searches — competitor tech stack and adjacent analytics/CMS tools — both filtered by scoop keywords, 500–50K employees, $50M+ revenue, rolling 6-month window.</div>
+      <div class="tier-sources">
+        <span class="source-chip chip-amber">ZoomInfo — competitor tech</span>
+        <span class="source-chip chip-amber">ZoomInfo — analytic/CMS signal</span>
+        <span class="source-chip chip-amber">Scoop intent keywords</span>
+      </div>
+    </div>
+    <div class="tier-count">~25<span>accounts</span></div>
+  </div>
+</div>
+
+<div class="signals">
+  <div class="section-label">Key scoring signals</div>
+  <div class="signal-grid">
+    <div class="signal-card">
+      <div class="signal-icon">📊</div>
+      <div class="signal-name">Exp utilisation rate</div>
+      <div class="signal-detail">Events received MTD ÷ purchased entitlement. Accounts below 5% are primary targets.</div>
+      <div class="signal-strength"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-icon">🏁</div>
+      <div class="signal-name">Competitor presence</div>
+      <div class="signal-detail">Statsig, Eppo, Optimizely named in Gong calls. Urgency: immediate, active, or watch.</div>
+      <div class="signal-strength"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-icon">📅</div>
+      <div class="signal-name">Days since last experiment</div>
+      <div class="signal-detail">Accounts furthest from last iteration surface first. Null = never started.</div>
+      <div class="signal-strength"><div class="pip on"></div><div class="pip on"></div><div class="pip"></div></div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-icon">💼</div>
+      <div class="signal-name">Open opportunity</div>
+      <div class="signal-detail">Active SFDC opp with experimentation as primary or secondary motion adds 3 points.</div>
+      <div class="signal-strength"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-icon">🔍</div>
+      <div class="signal-name">ZoomInfo scoop intent</div>
+      <div class="signal-detail">Recent news signal: experimentation, feature flags, CRO, growth engineering, personalization.</div>
+      <div class="signal-strength"><div class="pip on"></div><div class="pip on"></div><div class="pip"></div></div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-icon">🔄</div>
+      <div class="signal-name">Renewal window</div>
+      <div class="signal-detail">Competitor contract renewal 12–18 months out. Sourced from Gong calls and Salesforce.</div>
+      <div class="signal-strength"><div class="pip on"></div><div class="pip on"></div><div class="pip"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="arch">
+  <div class="section-label">Architecture</div>
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="arch-label">Pipeline</div>
+      <div class="arch-value">Deterministic Python batch (asyncio). Same inputs + same config = same ranked output. No LLM in the scorer.</div>
+    </div>
+    <div class="arch-card">
+      <div class="arch-label">Configuration</div>
+      <div class="arch-value">Prompts and Cypher queries live in YAML — wisdom_cypher.yaml, settings.yaml, tier3_sources.yaml. Update without touching code.</div>
+    </div>
+    <div class="arch-card">
+      <div class="arch-label">Data model</div>
+      <div class="arch-value">Single AccountRecord type (core/schema.py). Two parallel views: per-tier exports for Sheets, merged list for console and Slack.</div>
+    </div>
+    <div class="arch-card">
+      <div class="arch-label">Output</div>
+      <div class="arch-value">Google Sheets (3 tier tabs + optional merged master + changelog), Slack top-N weekly digest, run-to-run diff via local snapshot.</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <div class="footer-note">Human override layer preserved — AEs, CSMs, and Exp Solutions can flag any account for inclusion, exclusion, or escalation.</div>
+  <div class="footer-tech">
+    <span class="tech-pill">Python 3.11</span>
+    <span class="tech-pill">Looker API</span>
+    <span class="tech-pill">Enterpret MCP</span>
+    <span class="tech-pill">ZoomInfo API</span>
+    <span class="tech-pill">Google Sheets</span>
+    <span class="tech-pill">YAML config</span>
+  </div>
+</div>
+
+</body>
+</html>
