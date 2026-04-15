@@ -1,6 +1,6 @@
 import pytest
 
-from agents.prioritizer import apply_prioritizer_response
+from agents.prioritizer import apply_prioritizer_response, prioritizer_llm_requested
 from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_tier2_jobs
 from agents.wisdom_prompts import (
     WISDOM_CYPHER_ENV_SUFFIX_BY_FLAG_KEY,
@@ -58,6 +58,15 @@ def test_apply_prioritizer_response_sets_ranks():
     assert out[0].priority_rank == 1 and out[0].expansion_score == 9.0
     assert out[0].notes == "hot"
     assert out[1].priority_rank == 2
+
+
+def test_prioritizer_llm_requested_default_and_deterministic(monkeypatch):
+    monkeypatch.delenv("E100_PRIORITIZER_MODE", raising=False)
+    assert prioritizer_llm_requested() is True
+    monkeypatch.setenv("E100_PRIORITIZER_MODE", "deterministic")
+    assert prioritizer_llm_requested() is False
+    monkeypatch.setenv("E100_PRIORITIZER_MODE", "off")
+    assert prioritizer_llm_requested() is False
 
 
 def test_merge_and_score_fallback_without_prioritizer():

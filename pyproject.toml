@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "figment-agent"
 version = "0.1.0"
-description = "E100 expansion list pipeline: Looker, Enterpret Wisdom (MCP), deterministic merge/score"
+description = "E100 expansion list pipeline: Looker, Enterpret Wisdom (MCP), merge/score (optional LD LLM prioritizer)"
 requires-python = ">=3.9"
 dependencies = [
     "httpx>=0.27",
@@ -29,6 +29,14 @@ dev = [
 ]
 launchdarkly = [
     "launchdarkly-server-sdk>=9.8,<9.15",
+    "launchdarkly-server-sdk-ai>=0.14.0",
+]
+# Anthropic SDK (optional); prioritizer can use httpx + ANTHROPIC_API_KEY without this.
+# scripts/ld_prioritizer_smoke.py uses the anthropic package.
+launchdarkly-ai = [
+    "launchdarkly-server-sdk>=9.8,<9.15",
+    "launchdarkly-server-sdk-ai>=0.14.0",
+    "anthropic>=0.18.0",
 ]
 
 [tool.setuptools.packages.find]

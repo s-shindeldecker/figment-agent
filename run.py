@@ -5,6 +5,11 @@ from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
+from agents.prioritizer import (
+    PRIORITIZER_AI_CONFIG_KEY,
+    prioritizer_llm_requested,
+    prioritize_with_ai_config,
+)
 from agents.tier1_looker import Tier1LookerAgent
 from agents.tier2_enterpret import WisdomMCPError, execute_wisdom_tier2_jobs
 from agents.tier3_web import collect as collect_tier3_web
@@ -95,9 +100,30 @@ async def run_e100_refresh():
     )
 
     # ---- Merge by account + rank (console, Slack, optional merged tab) ----
-    print("[Prioritizer] Deterministic merge_and_score (core/scorer.py)")
-    final_list = merge_and_score(combined)
-    print(f"[Merge] {len(combined)} raw → {len(final_list)} after merge")
+    deduped = merge_accounts(combined)
+    print(f"[Merge] {len(combined)} raw → {len(deduped)} accounts after merge-by-name")
+
+    ranking_source = "deterministic (merge_and_score / core/scorer.py)"
+    final_list = None
+
+    if prioritizer_llm_requested():
+        final_list = await prioritize_with_ai_config(deduped)
+        if final_list is not None:
+            ranking_source = (
+                f"llm (LaunchDarkly agent AI Config {PRIORITIZER_AI_CONFIG_KEY!r} + Anthropic)"
+            )
+        else:
+            ranking_source = "deterministic (fallback after LLM path skipped or failed)"
+    else:
+        print(
+            "[Prioritizer] E100_PRIORITIZER_MODE=deterministic — skipping LLM; "
+            "using merge_and_score only"
+        )
+
+    if final_list is None:
+        final_list = merge_and_score(combined)
+
+    print(f"[Prioritizer] Ranking source: {ranking_source}")
 
     summary_list = resolve_e100_summary_list(final_list)
     if len(summary_list) != len(final_list):
@@ -135,7 +161,8 @@ async def run_e100_refresh():
 
     print(
         f"\nE100 refresh complete — {len(summary_list)} accounts in summary output "
-        f"({len(final_list)} after merge)."
+        f"({len(final_list)} after merge).\n"
+        f"  Ranking: {ranking_source}"
     )
 
 

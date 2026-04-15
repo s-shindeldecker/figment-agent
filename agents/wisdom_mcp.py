@@ -303,41 +303,128 @@ def tool_result_to_text(result: dict) -> str:
     return ""
 
 
+def _json_array_start_positions(s: str) -> List[int]:
+    """
+    Indices where a JSON array-of-objects likely starts.
+
+    Prefer ``[`` followed by ``{`` so a stray ``[`` in prose (before the real payload)
+    does not get parsed first and fail.
+    """
+    preferred = [m.start() for m in re.finditer(r"\[\s*\{", s)]
+    seen = set(preferred)
+    extras: List[int] = []
+    pos = 0
+    while True:
+        i = s.find("[", pos)
+        if i < 0:
+            break
+        if i not in seen:
+            extras.append(i)
+            seen.add(i)
+        pos = i + 1
+    return preferred + extras
+
+
+def _json_list_to_dict_rows(data: list) -> Optional[List[dict]]:
+    """
+    Accept a JSON list if every non-null element is an object; drop null entries.
+
+    LLMs occasionally emit ``null`` placeholders between objects; strict
+    ``all(isinstance(..., dict))`` would reject the whole array.
+    """
+    if any(x is not None and not isinstance(x, dict) for x in data):
+        return None
+    rows = [x for x in data if isinstance(x, dict)]
+    return rows or None
+
+
+def format_json_array_parse_failure(text: str) -> str:
+    """
+    One-line (plus optional context) explanation when ``extract_json_array_from_text`` fails.
+
+    Tries ``raw_decode`` from the first ``[`` so JSONDecodeError position matches the model body.
+    """
+    s = text.strip()
+    if not s:
+        return "Model output was empty."
+    positions = _json_array_start_positions(s)
+    if not positions:
+        return "No '[' found in model output."
+    decoder = json.JSONDecoder()
+    pos = positions[0]
+    try:
+        data, _ = decoder.raw_decode(s, pos)
+    except json.JSONDecodeError as e:
+        lo = max(0, e.pos - 200)
+        hi = min(len(s), e.pos + 200)
+        hint = ""
+        if "Unterminated string" in (e.msg or ""):
+            hint = (
+                "\n  Hint: often caused by **truncated model output** (Anthropic ``max_tokens`` / "
+                "``stop_reason=max_tokens``). Raise ``E100_PRIORITIZER_MAX_OUTPUT_TOKENS`` or LD "
+                "variation ``maxTokens``."
+            )
+        return (
+            f"JSONDecodeError at char {e.pos} (line {e.lineno}, col {e.colno}): {e.msg!r}\n"
+            f"  context: {s[lo:hi]!r}"
+            f"{hint}"
+        )
+    if not isinstance(data, list):
+        return f"First JSON value was {type(data).__name__!r}, not an array."
+    bad = [(i, type(x).__name__) for i, x in enumerate(data) if x is not None and not isinstance(x, dict)]
+    if bad:
+        return (
+            f"First JSON array has length {len(data)}; element {bad[0][0]} is {bad[0][1]!r} "
+            f"(expected object or null)."
+        )
+    if not any(isinstance(x, dict) for x in data):
+        return "First JSON array contained no objects."
+    return (
+        "First '[' begins a JSON array of only objects/nulls (valid). "
+        "If the run still failed, save the full model output to a file — an earlier '[' "
+        "in the text may have been parsed first."
+    )
+
+
 def extract_json_array_from_text(text: str) -> Optional[List[dict]]:
     """
     Parse a JSON array of objects from model/tool text (fenced block or raw).
-    Returns None if no array found.
+
+    Uses :class:`json.JSONDecoder` ``raw_decode`` so brackets inside JSON strings
+    (e.g. ``notes`` containing ``]``) do not truncate the array. A naive bracket
+    scan would treat those characters as array delimiters and fail ``json.loads``.
     """
     if not text:
         return None
 
-    fence = re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", text, re.IGNORECASE)
+    s = text.strip()
+    decoder = json.JSONDecoder()
+
+    fence = re.search(r"```(?:json)?\s*", s, re.IGNORECASE)
     if fence:
+        rest = s[fence.end() :]
+        close = rest.find("```")
+        if close != -1:
+            inner = rest[:close].strip()
+            for start in _json_array_start_positions(inner):
+                try:
+                    data, _ = decoder.raw_decode(inner, start)
+                    if isinstance(data, list):
+                        rows = _json_list_to_dict_rows(data)
+                        if rows is not None:
+                            return rows
+                except json.JSONDecodeError:
+                    pass
+
+    for start in _json_array_start_positions(s):
         try:
-            data = json.loads(fence.group(1))
+            data, _ = decoder.raw_decode(s, start)
             if isinstance(data, list):
-                return [x for x in data if isinstance(x, dict)]
+                rows = _json_list_to_dict_rows(data)
+                if rows is not None:
+                    return rows
         except json.JSONDecodeError:
             pass
-
-    start = text.find("[")
-    while start != -1:
-        depth = 0
-        for i in range(start, len(text)):
-            c = text[i]
-            if c == "[":
-                depth += 1
-            elif c == "]":
-                depth -= 1
-                if depth == 0:
-                    chunk = text[start : i + 1]
-                    try:
-                        data = json.loads(chunk)
-                        if isinstance(data, list) and all(isinstance(x, dict) for x in data):
-                            return data
-                    except json.JSONDecodeError:
-                        break
-        start = text.find("[", start + 1)
 
     return None
 

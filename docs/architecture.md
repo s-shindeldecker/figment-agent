@@ -4,7 +4,7 @@ This document describes how **figment-agent** is structured: data flow, major mo
 
 ## Purpose
 
-**Figment (figment-agent)** is a Python **batch pipeline** that builds the **E100 expansion account list**. It pulls accounts from multiple sources (usage, competitive intel, optional third-party and web signals), **deduplicates by account name**, **scores and ranks** deterministically, then **emits** console output, optional **Google Sheets**, and optional **Slack**.
+**Figment (figment-agent)** is a Python **batch pipeline** that builds the **E100 expansion account list**. It pulls accounts from multiple sources (usage, competitive intel, optional third-party and web signals), **deduplicates by account name**, then **ranks** the merged list either with an optional **LaunchDarkly agent AI Config + Anthropic** prioritizer (default) or **`merge_and_score`** / `core/scorer.py` as fallback, then **emits** console output, optional **Google Sheets**, and optional **Slack**.
 
 ## Core data model
 
@@ -17,7 +17,7 @@ Downstream code assumes this single type.
 - [`run.py`](../run.py) is the **async entrypoint** (`asyncio.run(run_e100_refresh)`).
 - It **sequentially** runs Tier 1 → Tier 2 (if `WISDOM_AUTH_TOKEN` is set) → Tier 3 (ZoomInfo CSVs when present, then optional allowlisted web), **appends** all rows into a **`combined`** list, then:
   - Builds **per-tier Sheet rows** (cloned accounts with tier-local score/rank — see [Core processing](#core-processing-core)).
-  - Runs **`merge_and_score(combined)`**, then **`resolve_e100_summary_list`** (default **50/25/25** by merged `tier` + score backfill to 100) for **console, Slack, and the optional E100 Summary sheet**; tier tabs remain full per-tier lists.
+  - Runs **`merge_accounts(combined)`**, then (unless `E100_PRIORITIZER_MODE=deterministic`) **`prioritize_with_ai_config(deduped)`** which evaluates the LD **agent** AI Config and calls Anthropic via httpx; on success applies `apply_prioritizer_response`, else **`merge_and_score(combined)`**. Logs **`[Prioritizer] Ranking source: …`**. Then **`resolve_e100_summary_list`** (default **50/25/25** by merged `tier` + score backfill to 100) for **console, Slack, and the optional E100 Summary sheet**; tier tabs remain full per-tier lists.
 - **Configuration** is split between **`.env`** (secrets, paths, feature flags) and **`config/settings.yaml`** (scoring weights, summary quotas, etc.). Tier-2 Cypher lives in **`config/wisdom_cypher.yaml`** and optional LaunchDarkly (see README). Sheet tab titles are fixed in **`outputs/sheets_writer.py`**.
 
 ```mermaid
@@ -30,7 +30,7 @@ flowchart TB
   end
   subgraph core [Core]
     M[merge_accounts dedupe]
-    S[merge_and_score score rank]
+    P[LLM prioritizer or merge_and_score]
   end
   subgraph out [Outputs]
     C[Console]
@@ -41,11 +41,11 @@ flowchart TB
   T2 --> combined
   T3Z --> combined
   T3W --> combined
-  combined --> M --> S --> C
-  S --> SL
+  combined --> M --> P --> C
+  P --> SL
   combined --> tierSheets[clone score rank per tier]
   tierSheets --> SH
-  S --> SH
+  P --> SH
 ```
 
 ## Tier agents (`agents/`)
@@ -58,6 +58,7 @@ flowchart TB
 | [`tier3_zoominfo.py`](../agents/tier3_zoominfo.py) | Tier 3 from **ZoomInfo-style exports** under `data/` when files exist. |
 | [`tier3_web.py`](../agents/tier3_web.py) | Optional Tier 3 from **allowlisted URLs** ([`config/tier3_sources.yaml`](../config/tier3_sources.yaml)), env-gated. |
 | [`base.py`](../agents/base.py) | Shared agent scaffolding where used. |
+| [`prioritizer.py`](../agents/prioritizer.py) | Optional **LD agent AI Config** + Anthropic httpx ranking; JSON parse via `wisdom_mcp.extract_json_array_from_text`; emits LD AI **metrics** (`track_duration`, `track_tokens`, success/error) + `ldclient.flush()`. |
 
 Tier 2 uses **`execute_cypher_query` only** (no prose / `search_knowledge_graph`). Cypher comes from env, [`config/wisdom_cypher.yaml`](../config/wisdom_cypher.yaml), and optional **per-map-key** LaunchDarkly JSON flags; missing Cypher for a job is a **hard error**. Optional LaunchDarkly **string** flag **`figment-agent-tier2-log-verbosity`** (and env `WISDOM_TIER2_LOG_VERBOSITY`) gates extra Tier-2 console detail for debugging and a JSON **monitor** summary line. [`bootstrap/wisdom_get_schema.py`](../bootstrap/wisdom_get_schema.py) is a CLI helper for graph schema.
 
@@ -86,7 +87,7 @@ Tier 2 uses **`execute_cypher_query` only** (no prose / `search_knowledge_graph`
 
 ## Design choices worth preserving
 
-1. **Deterministic ranking** — Same inputs + same config → same order (no LLM in the scorer).
+1. **Deterministic fallback** — `merge_and_score` gives repeatable ranks when the LLM path is off or fails; same inputs + same config → same order for that path.
 2. **Two parallel views of data** — **Per-tier** ranked clones for Sheets vs **one merged** list for console/Slack/optional master tab.
 3. **Secrets and snapshots** — Service account JSON and `.env` are gitignored; Sheets run-to-run diff uses a **local JSON snapshot** (e.g. under `data/`), not Google Sheets version history.
 
@@ -99,7 +100,7 @@ Tier 2 uses **`execute_cypher_query` only** (no prose / `search_knowledge_graph`
 | `agents/tier2_enterpret.py` | Wisdom MCP session(s), Cypher-only Tier-2 jobs, merge into accounts. |
 | `agents/wisdom_mcp.py` | Streamable HTTP MCP client. |
 | `agents/wisdom_prompts.py` | Tier-2 job keys and Cypher env suffix map. |
-| `agents/prioritizer.py` | `apply_prioritizer_response` helper for tests / future hooks. |
+| `agents/prioritizer.py` | LLM prioritizer + `apply_prioritizer_response`; LD AI metrics on Anthropic httpx path. |
 | `core/schema.py` | `AccountRecord` datamodel. |
 | `core/deduplicator.py`, `core/merger.py`, `core/scorer.py` | Merge and deterministic ranking. |
 | `outputs/` | Google Sheets and Slack integrations. |
@@ -107,12 +108,13 @@ Tier 2 uses **`execute_cypher_query` only** (no prose / `search_knowledge_graph`
 ## Repository layout
 
 ```
-agents/          # Tier agents, Wisdom MCP client
+agents/          # Tier agents, Wisdom MCP client, prioritizer
 bootstrap/       # wisdom_get_schema helper
 config/          # settings.yaml, wisdom_cypher.yaml, tier3_sources.yaml, e100_output_columns.yaml
 core/            # schema, dedupe, merge, scoring
 docs/            # This document and other internal notes
 outputs/         # Sheets, Slack, manifest, run diff
+scripts/         # e.g. ld_prioritizer_smoke.py
 tests/           # pytest
 run.py           # CLI entrypoint
 ```

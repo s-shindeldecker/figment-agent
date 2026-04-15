@@ -20,6 +20,25 @@ def test_extract_json_array_raw():
     assert rows == [{"account_name": "Beta"}]
 
 
+def test_extract_json_array_allows_null_entries_between_objects():
+    text = '[{"account_name": "A"}, null, {"account_name": "B"}]'
+    rows = extract_json_array_from_text(text)
+    assert rows == [{"account_name": "A"}, {"account_name": "B"}]
+
+
+def test_extract_json_array_bracket_inside_string_does_not_truncate():
+    """Regression: naive ] depth counting breaks on brackets inside JSON string values."""
+    text = """[
+  {"account_name": "A", "priority_rank": 1, "notes": "See [0,1] and page ] footnotes"},
+  {"account_name": "B", "priority_rank": 2, "notes": "plain"}
+]"""
+    rows = extract_json_array_from_text(text)
+    assert rows == [
+        {"account_name": "A", "priority_rank": 1, "notes": "See [0,1] and page ] footnotes"},
+        {"account_name": "B", "priority_rank": 2, "notes": "plain"},
+    ]
+
+
 def test_records_from_structured_content_list():
     result = {"structuredContent": [{"account_name": "Co"}]}
     assert records_from_wisdom_tool_result(result) == [{"account_name": "Co"}]
