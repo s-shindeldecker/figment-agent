@@ -19,6 +19,7 @@ from core.deduplicator import merge_accounts
 from core.merger import (
     clone_accounts_for_sheet_export,
     merge_and_score,
+    merge_only,
     resolve_e100_summary_list,
     score_and_rank_for_export,
 )
@@ -100,7 +101,10 @@ async def run_e100_refresh():
     )
 
     # ---- Merge by account + rank (console, Slack, optional merged tab) ----
-    deduped = merge_accounts(combined)
+    # For the LLM path: merge only, no pre-scoring. Clean records let the model
+    # reason from raw signals rather than anchoring on deterministic scores.
+    # For the deterministic fallback path: merge_and_score runs as before.
+    deduped = merge_only(combined)
     print(f"[Merge] {len(combined)} raw → {len(deduped)} accounts after merge-by-name")
 
     ranking_source = "deterministic (merge_and_score / core/scorer.py)"
@@ -121,6 +125,7 @@ async def run_e100_refresh():
         )
 
     if final_list is None:
+        # Deterministic fallback: run full merge_and_score from combined (includes scoring)
         final_list = merge_and_score(combined)
 
     print(f"[Prioritizer] Ranking source: {ranking_source}")

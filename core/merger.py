@@ -152,6 +152,18 @@ def score_and_rank_for_export(accounts: list[AccountRecord]) -> list[AccountReco
     return ranked
 
 
+def merge_only(accounts: list[AccountRecord]) -> list[AccountRecord]:
+    """
+    Merge rows that share an account name across tiers without scoring or ranking.
+    Returns deduplicated list with expansion_score and priority_rank unset.
+    Use this as input to the LLM prioritizer so the model receives clean signals
+    with no pre-baked deterministic scores attached.
+
+    The deterministic path should use merge_and_score() instead.
+    """
+    return merge_accounts(accounts)
+
+
 def merge_and_score(accounts: list[AccountRecord]) -> list[AccountRecord]:
     """
     Merge rows that share an account name across tiers, score, and rank.

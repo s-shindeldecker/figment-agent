@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
@@ -108,7 +109,8 @@ _USER_PAYLOAD_SUFFIX = (
 
 # Omit from LLM user JSON by default (saves tokens; looker_extras alone can be 100k+ chars).
 _LLM_INPUT_SKIP_FIELDS = frozenset(
-    {"looker_extras", "wisdom_extras", "tier3_extras", "last_updated"}
+    {"looker_extras", "wisdom_extras", "tier3_extras", "last_updated",
+     "expansion_score", "priority_rank"}
 )
 
 
@@ -135,6 +137,14 @@ def _accounts_json_for_prioritizer_llm(accounts: List[AccountRecord]) -> str:
         for k in _LLM_INPUT_SKIP_FIELDS:
             d.pop(k, None)
         slim = {k: v for k, v in d.items() if v is not None and v != {} and v != []}
+        # Strip ZoomInfo export artifacts from notes before sending to LLM
+        if "notes" in slim and isinstance(slim["notes"], str):
+            cleaned = re.sub(r"instantexportexcel\d+", "", slim["notes"]).strip()
+            cleaned = re.sub(r"\n+", "\n", cleaned).strip()
+            if cleaned:
+                slim["notes"] = cleaned
+            else:
+                del slim["notes"]
         rows.append(slim)
     return json.dumps(rows, indent=2, default=str)
 
