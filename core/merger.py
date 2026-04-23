@@ -127,6 +127,25 @@ def resolve_e100_summary_list(full_ranked: List[AccountRecord]) -> List[AccountR
     return select_e100_summary_list(full_ranked, q1, q2, q3)
 
 
+def extract_save_accounts(
+    accounts: List[AccountRecord],
+) -> List[AccountRecord]:
+    """
+    Return accounts that appear in both Tier 1 (Looker) and Tier 2 (Enterpret).
+    These are existing customers with confirmed competitive intelligence —
+    the highest-priority save motion targets.
+
+    Detection: source field contains both 'looker' and 'enterpret' substrings,
+    indicating the account was merged from both sources during deduplication.
+    """
+    save: List[AccountRecord] = []
+    for a in accounts:
+        src = (a.source or "").lower()
+        if "looker" in src and "enterpret" in src:
+            save.append(a)
+    return sorted(save, key=lambda x: x.expansion_score or 0, reverse=True)
+
+
 def clone_accounts_for_sheet_export(
     accounts: list[AccountRecord],
 ) -> list[AccountRecord]:

@@ -18,6 +18,7 @@ from agents.wisdom_prompts import tier2_job_keys
 from core.deduplicator import merge_accounts
 from core.merger import (
     clone_accounts_for_sheet_export,
+    extract_save_accounts,
     merge_and_score,
     merge_only,
     resolve_e100_summary_list,
@@ -131,6 +132,16 @@ async def run_e100_refresh():
     print(f"[Prioritizer] Ranking source: {ranking_source}")
 
     summary_list = resolve_e100_summary_list(final_list)
+
+    save_list = extract_save_accounts(final_list)
+    if save_list:
+        print(
+            f"[Save] {len(save_list)} T1+T2 cross-tier accounts identified "
+            f"(existing customers with competitive intelligence)"
+        )
+    else:
+        print("[Save] No T1+T2 cross-tier accounts found in this run")
+
     if len(summary_list) != len(final_list):
         print(
             f"[Summary] Quota list {len(summary_list)} accounts "
@@ -139,6 +150,20 @@ async def run_e100_refresh():
 
     # ---- Outputs ---------------------------------------------------------
     _print_results(summary_list)
+
+    if save_list:
+        print(
+            f"\n[Save] {len(save_list)} accounts in Save tab "
+            f"(T1+T2 cross-tier — existing customers with competitive signal):"
+        )
+        for a in save_list[:10]:
+            competitor = f" | competitor: {a.competitor}" if a.competitor else ""
+            urgency = f" | {a.urgency}" if a.urgency else ""
+            arr = f"${a.arr:,.0f}" if a.arr else "N/A"
+            print(
+                f"  {a.priority_rank or '?':>3}. {(a.account_name or '')[:45]:<45} "
+                f"{arr:<14}{urgency}{competitor}"
+            )
 
     sheet_id = os.getenv("GOOGLE_SHEET_ID")
     if sheet_id and sheet_id != "...":
@@ -149,6 +174,7 @@ async def run_e100_refresh():
             tier2_sheet_rows,
             tier3_sheet_rows,
             merged_accounts=summary_list,
+            save_accounts=save_list,
             sheet_id=sheet_id,
         )
         extra = " + merged master tab" if write_merged_master_enabled() else ""

@@ -34,8 +34,46 @@ _WORKSHEET_TITLES: Dict[str, str] = {
     "tier2": "E100 Tier 2",
     "tier3": "E100 Tier 3",
     "merged": "E100 Summary",
+    "save": "E100 Save",
     "changelog": "E100 Changelog",
 }
+
+# Save tab columns — optimized for the save motion (competitive context first)
+# Separate from the full manifest to keep the save tab focused and scannable.
+_SAVE_TAB_HEADERS = [
+    "Priority Rank",
+    "Account Name",
+    "Urgency",
+    "Competitor",
+    "Deal Context",
+    "ARR",
+    "AE",
+    "CSM",
+    "Renewal Date",
+    "Expansion Score",
+    "Tier",
+    "Source",
+    "Notes",
+]
+
+
+def _save_tab_row(account: AccountRecord) -> List[Any]:
+    """Extract Save tab row from an AccountRecord."""
+    return [
+        account.priority_rank,
+        account.account_name,
+        account.urgency or "",
+        account.competitor or "",
+        account.deal_context or "",
+        account.arr,
+        account.ae or "",
+        account.csm or "",
+        account.renewal_date or "",
+        account.expansion_score,
+        account.tier,
+        account.source or "",
+        account.notes or "",
+    ]
 
 
 def _google_service_account_path() -> Path:
@@ -57,7 +95,8 @@ def _google_service_account_path() -> Path:
 def worksheet_titles() -> Dict[str, str]:
     """
     Worksheet titles for gspread lookups. Keys: ``tier1`` … ``tier3``, ``merged`` (summary),
-    ``changelog``. Must match tab names in the spreadsheet exactly or a new tab will be created.
+    ``save`` (T1+T2 cross-tier), ``changelog``. Must match tab names in the spreadsheet exactly
+    or a new tab will be created.
 
     Names are hardcoded in ``_WORKSHEET_TITLES`` in this module (not environment variables).
     """
@@ -154,11 +193,13 @@ def write_to_sheets_by_tier(
     tier2_accounts: List[AccountRecord],
     tier3_accounts: List[AccountRecord],
     merged_accounts: Optional[List[AccountRecord]] = None,
+    save_accounts: Optional[List[AccountRecord]] = None,
     sheet_id: Optional[str] = None,
 ) -> None:
     """
     Write three worksheets (Tier 1 / 2 / 3). If ``E100_WRITE_MERGED_MASTER`` is set,
     also write ``merged_accounts`` to the summary tab (see ``_WORKSHEET_TITLES``).
+    When ``save_accounts`` is non-empty, write the focused ``E100 Save`` tab (T1+T2 cross-tier).
     Writes ``E100 Changelog`` (tab name configurable) and persists
     ``data/e100_last_sheet_snapshot.json`` for the next run's diff.
     """
@@ -207,6 +248,7 @@ def write_to_sheets_by_tier(
 
     ws_t1 = ws_t2 = ws_t3 = None
     ws_merged = None
+    ws_save = None
 
     for label, rows in (
         ("tier1", tier1_accounts),
@@ -256,6 +298,24 @@ def write_to_sheets_by_tier(
             )
         _write_manifest_to_worksheet(sheet, merged_accounts, columns, delta_by_key=delta)
 
+    if save_accounts:
+        save_title = titles["save"]
+        ws_save = _get_or_create_worksheet(
+            spreadsheet,
+            save_title,
+            min_rows=len(save_accounts) + 10,
+            min_cols=len(_SAVE_TAB_HEADERS) + 2,
+        )
+        save_rows = [_save_tab_row(a) for a in save_accounts]
+        save_values = [_SAVE_TAB_HEADERS] + save_rows
+        ws_save.clear()
+        ws_save.update(
+            range_name="A1",
+            values=save_values,
+            value_input_option="USER_ENTERED",
+        )
+        print(f"[Sheets] Save tab written — {len(save_accounts)} T1+T2 cross-tier accounts")
+
     changelog_title = titles["changelog"]
     changelog_values = build_changelog_sheet_values(
         prev_saved_at if isinstance(prev_saved_at, str) else None,
@@ -276,10 +336,12 @@ def write_to_sheets_by_tier(
         value_input_option="USER_ENTERED",
     )
 
-    # Summary (merged) first, then tier tabs, then changelog — matches spreadsheet tab order.
+    # Summary (merged) first, Save, tier tabs, then changelog — matches spreadsheet tab order.
     order: List[Any] = []
     if ws_merged is not None:
         order.append(ws_merged)
+    if ws_save is not None:
+        order.append(ws_save)
     for ws in (ws_t1, ws_t2, ws_t3):
         if ws is not None:
             order.append(ws)
